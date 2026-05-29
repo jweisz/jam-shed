@@ -1,21 +1,28 @@
 from typing import List, Optional
 
 class MusicTheory:
-    # MIDI note offsets for common scales
+    # MIDI note offsets for common scales, ordered by brightness (bright to dark)
     SCALES = {
-        "Major": [0, 2, 4, 5, 7, 9, 11],
-        "Minor": [0, 2, 3, 5, 7, 8, 10],
-        "Ionian (Major)": [0, 2, 4, 5, 7, 9, 11],
-        "Aeolian (Minor)": [0, 2, 3, 5, 7, 8, 10],
         "Lydian": [0, 2, 4, 6, 7, 9, 11],
-        "Phrygian": [0, 1, 3, 5, 7, 8, 10],
-        "Locrian": [0, 1, 3, 5, 6, 8, 10],
+        "Major (Ionian)": [0, 2, 4, 5, 7, 9, 11],
         "Pentatonic Major": [0, 2, 4, 7, 9],
-        "Pentatonic Minor": [0, 3, 5, 7, 10],
+        "Mixolydian": [0, 2, 4, 5, 7, 9, 10],
         "Blues": [0, 3, 5, 6, 7, 10],
         "Dorian": [0, 2, 3, 5, 7, 9, 10],
-        "Mixolydian": [0, 2, 4, 5, 7, 9, 10],
+        "Pentatonic Minor": [0, 3, 5, 7, 10],
+        "Minor (Aeolian)": [0, 2, 3, 5, 7, 8, 10],
+        "Phrygian": [0, 1, 3, 5, 7, 8, 10],
+        "Locrian": [0, 1, 3, 5, 6, 8, 10],
     }
+
+    SCALE_ALIASES = {
+        "Major": "Major (Ionian)",
+        "Minor": "Minor (Aeolian)",
+        "Ionian (Major)": "Major (Ionian)",
+        "Aeolian (Minor)": "Minor (Aeolian)",
+    }
+
+    SCALE_OPTIONS = list(SCALES.keys())
 
     KEYS = {
         "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5,
@@ -28,7 +35,8 @@ class MusicTheory:
             octaves = [3, 4, 5]
 
         root_offset = MusicTheory.KEYS.get(root_note, 0)
-        scale_offsets = MusicTheory.SCALES.get(scale_name, MusicTheory.SCALES["Major"])
+        resolved_scale_name = MusicTheory.SCALE_ALIASES.get(scale_name, scale_name)
+        scale_offsets = MusicTheory.SCALES.get(resolved_scale_name, MusicTheory.SCALES["Major (Ionian)"])
 
         notes = []
         for octave in octaves:
@@ -78,7 +86,8 @@ class MusicTheory:
         progression = MusicTheory.PROGRESSIONS.get(progression_name, ["I", "IV", "V", "IV"])
 
         # Get scale intervals (0, 2, 4...)
-        scale_intervals = MusicTheory.SCALES.get(scale_name, MusicTheory.SCALES["Major"])
+        resolved_scale_name = MusicTheory.SCALE_ALIASES.get(scale_name, scale_name)
+        scale_intervals = MusicTheory.SCALES.get(resolved_scale_name, MusicTheory.SCALES["Major (Ionian)"])
         root_base = MusicTheory.KEYS.get(key_root, 0)
 
         chord_sequence = []

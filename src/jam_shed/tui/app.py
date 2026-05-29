@@ -5,7 +5,7 @@ import threading
 import time
 import random
 from textual.widgets import Header, Footer, Select, Static, Label, Button, RadioSet, RadioButton, RichLog, Checkbox, Input
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Grid, Horizontal, ItemGrid, Vertical, VerticalScroll
 from jam_shed.midi.engine import MIDIEngine
 from jam_shed.core.brain import RhythmicBrain
 from jam_shed.agents import PlayingStyle
@@ -21,7 +21,6 @@ from jam_shed.tui.visual import (
     render_groove_pattern_rich,
     render_gauge,
     render_beat_dots,
-    EnergyWaveformVisualizer,
 )
 
 class ClockThread(threading.Thread):
@@ -307,6 +306,43 @@ class JamShedApp(App):
         color: white;
     }
 
+    /* ── Jam Controls ─────────────────────────────── */
+    #jam_controls {
+        height: auto;
+        padding: 0 1;
+        margin-top: 1;
+        background: $surface;
+        border: solid #AA00FF;
+    }
+    #jam_controls .settings-row {
+        margin-top: 0;
+    }
+    #jam_controls .settings-grid {
+        height: auto;
+        margin-top: 0;
+        grid-size: 3;
+        grid-gutter: 0 1;
+    }
+    #jam_controls .settings-col {
+        width: 1fr;
+        height: auto;
+    }
+    #jam_controls .flow-grid {
+        height: auto;
+        margin-top: 0;
+    }
+    #jam_controls Select {
+        width: 100%;
+        height: 3;
+    }
+    #jam_controls Checkbox {
+        width: auto;
+        height: auto;
+        margin-left: 0;
+        margin-right: 1;
+        margin-top: 0;
+    }
+
     /* ── Groove / Bouncing Ball ────────────────────── */
     #groove_section {
         height: auto;
@@ -327,20 +363,6 @@ class JamShedApp(App):
         text-style: bold;
     }
 
-    /* ── Jam Visualizer ───────────────────────────── */
-    #jam_visualizer {
-        height: 3;
-        padding: 0 1;
-        background: $surface;
-        border: solid #AA00FF;
-    }
-    #jam_viz_label {
-        color: #AA00FF;
-        text-style: bold;
-    }
-    #jam_viz_content {
-        height: 1;
-    }
 
     /* ── Drum Kit (Dual Layer) ─────────────────────── */
     #kit_section {
@@ -491,7 +513,6 @@ class JamShedApp(App):
         self.click_track_active = False  # Default to off
         self.visual_click_active = False
         self._session_mode = "groove"  # Track selected mode
-        self._jam_visualizer = EnergyWaveformVisualizer()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -547,37 +568,6 @@ class JamShedApp(App):
                 yield Checkbox("Audible Click", id="click_track", value=False)
                 yield Checkbox("Visual Click", id="visual_click", value=False)
 
-                # Section 4: Jam Configuration (Only for Jam mode)
-                with Vertical(id="jam_controls", classes="hidden"):
-                    yield Label("Jam Settings", classes="status-active")
-                    with Horizontal(classes="settings-row"):
-                        with Vertical(classes="settings-col"):
-                            yield Label("Time")
-                            yield Select([("4/4", "4/4"), ("3/4", "3/4"), ("6/8", "6/8"), ("7/8", "7/8"), ("5/4", "5/4")],
-                                         id="select_time_sig", value="4/4")
-                        with Vertical(classes="settings-col"):
-                            yield Label("Key")
-                            yield Select([(k, k) for k in MusicTheory.KEYS.keys()], id="select_key", value="C")
-
-                    with Vertical(classes="settings-row"):
-                        yield Label("Scale")
-                        yield Select([(s, s) for s in MusicTheory.SCALES.keys()], id="select_scale", value="Pentatonic Minor")
-
-                    with Vertical(classes="settings-row hidden"):
-                        yield Label("Style")
-                        yield Select(
-                            [(style.value.replace("_", " ").title(), style.value) for style in PlayingStyle],
-                            id="select_style",
-                            value=PlayingStyle.ROCK.value
-                        )
-
-                    yield Label("Instrumentalists", classes="status-active")
-                    yield Checkbox("Drummer", id="agent_drummer", value=False)
-                    yield Checkbox("Keyboardist", id="agent_keyboardist", value=False)
-                    yield Checkbox("Lead Guitar", id="agent_lead_guitar", value=False)
-                    yield Checkbox("Rhythm Guitar", id="agent_rhythm_guitar", value=False)
-                    yield Checkbox("Bass", id="agent_bass", value=False)
-
             # Pinned Button
             yield Button("Start Session", id="btn_session", variant="success")
 
@@ -605,10 +595,36 @@ class JamShedApp(App):
             with Horizontal(id="instructions_panel", classes="hidden"):
                 yield Label("Start playing to begin the session.", id="label_instructions")
 
-            # 2b. Jam Visualizer (shown only in Jam mode)
-            with Vertical(id="jam_visualizer", classes="hidden"):
-                yield Label("♫ ENERGY", id="jam_viz_label")
-                yield Label("", id="jam_viz_content")
+            # 2b. Jam Controls (shown only in Jam mode)
+            with Vertical(id="jam_controls", classes="hidden"):
+                yield Label("JAM CONTROL", classes="status-active")
+                with Grid(classes="settings-grid"):
+                    with Vertical(classes="settings-col"):
+                        yield Label("Time")
+                        yield Select([("4/4", "4/4"), ("3/4", "3/4"), ("6/8", "6/8"), ("7/8", "7/8"), ("5/4", "5/4")],
+                                     id="select_time_sig", value="4/4")
+                    with Vertical(classes="settings-col"):
+                        yield Label("Key")
+                        yield Select([(k, k) for k in MusicTheory.KEYS.keys()], id="select_key", value="C")
+                    with Vertical(classes="settings-col"):
+                        yield Label("Scale")
+                        yield Select([(s, s) for s in MusicTheory.SCALE_OPTIONS], id="select_scale", value="Major (Ionian)")
+
+                with Vertical(classes="settings-row hidden"):
+                    yield Label("Style")
+                    yield Select(
+                        [(style.value.replace("_", " ").title(), style.value) for style in PlayingStyle],
+                        id="select_style",
+                        value=PlayingStyle.ROCK.value
+                    )
+
+                yield Label("Instrumentalists", classes="status-active")
+                with ItemGrid(classes="flow-grid", min_column_width=20, stretch_height=False):
+                    yield Checkbox("Drummer", id="agent_drummer", value=False)
+                    yield Checkbox("Keyboardist", id="agent_keyboardist", value=False)
+                    yield Checkbox("Lead Guitar", id="agent_lead_guitar", value=False)
+                    yield Checkbox("Rhythm Guitar", id="agent_rhythm_guitar", value=False)
+                    yield Checkbox("Bassist", id="agent_bass", value=False)
 
             # 3. YOUR GROOVE pattern
             with Vertical(id="groove_section", classes="agent-row"):
@@ -779,16 +795,13 @@ class JamShedApp(App):
             self._update_mode_visibility()
 
     def _update_mode_visibility(self):
-        """Show/hide TURN/PHASE vs Jam visualizer based on selected mode."""
+        """Show/hide TURN/PHASE based on selected mode."""
         try:
             banner = self.query_one("#session_banner")
-            viz = self.query_one("#jam_visualizer")
             if self._session_mode == "jam":
                 banner.add_class("hidden")
-                viz.remove_class("hidden")
             else:
                 banner.remove_class("hidden")
-                viz.add_class("hidden")
         except Exception:
             pass
 
@@ -1128,18 +1141,6 @@ class JamShedApp(App):
         except Exception:
             pass
 
-    def _update_jam_visualizer(self):
-        """Update the Jam mode energy waveform."""
-        try:
-            if self._session_mode != "jam":
-                return
-            state = self.brain.get_state()
-            self._jam_visualizer.update(state)
-            viz_content = self.query_one("#jam_viz_content", Label)
-            # Use available width (approximate)
-            viz_content.update(self._jam_visualizer.render(60))
-        except Exception:
-            pass
 
     def _update_scrolling_histories(self) -> None:
         """High-frequency update for the scrolling history. Called every tick (12x per beat)."""
@@ -1195,9 +1196,8 @@ class JamShedApp(App):
         # Stats dashboard
         self._update_stats_dashboard()
 
-        # Session banner (Groove/Shed) or Jam visualizer
+        # Session banner (Groove/Shed)
         self._update_session_banner()
-        self._update_jam_visualizer()
 
     def _update_agent_visuals(self, current_beat=0, current_sub_beat=0):
         """Updates the melodic history visualizer for active agents."""
