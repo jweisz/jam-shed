@@ -5,6 +5,7 @@ import random
 import threading
 from typing import Dict, Any, Optional, List, Tuple
 from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle, AgentMode
+from jam_shed.agents.style_calibration import get_drum_phrase_fill_multiplier
 from jam_shed.midi.engine import MIDIEngine
 from jam_shed.core.brain import RhythmicBrain
 
@@ -84,6 +85,9 @@ class VirtualDrummer(VirtualInstrumentalist):
         """Called 12 times per beat. Overrides base to use structured logic."""
         if not self.is_running or self.mode == AgentMode.SILENT:
             return
+
+        if sub_beat == 0:
+            self.update_endurance_from_state(state)
 
         # In this overhaul, we don't use the motif/pattern logic of the base class
         # We use the structured logic in play_note (dispatched to groove/fill)
@@ -225,6 +229,10 @@ class VirtualDrummer(VirtualInstrumentalist):
         elif sub_beat == 6 and random.random() < 0.1: # Light ghost snares
              self._play_drum_hit(DRUM_MAP["snare"], intensity // 3, beat, sub_beat)
 
+        # Phrase transition fills near 8-bar boundaries in Jam mode.
+        if self._is_phrase_fill_window(state, beat, sub_beat):
+            self._play_phrase_transition_fill(state, beat, sub_beat, intensity)
+
         # --- TIMEKEEPING: HH / Ride (Steady 8ths or 16ths) ---
         recent_human_activity = self.brain.get_pattern_data("groove")
         human_ride = any(51 in [h[0] for h in hits] for hits in recent_human_activity.values())
@@ -240,6 +248,45 @@ class VirtualDrummer(VirtualInstrumentalist):
         elif sub_beat in [3, 9] and (self.style in [PlayingStyle.FUNK, PlayingStyle.HIP_HOP] or intensity > 90):
             if random.random() < 0.6:
                 self._play_drum_hit(timekeeper, int(intensity * 0.5), beat, sub_beat)
+
+    def _is_phrase_fill_window(self, state: Dict[str, Any], beat: int, sub_beat: int) -> bool:
+        """Return True in the final beat of each 8-bar phrase during Jam mode."""
+        if not state.get("is_jam_mode"):
+            return False
+        if beat != 3 or sub_beat not in [0, 3, 6, 9]:
+            return False
+
+        bars_in_section = int(state.get("jam_section_bars", 0))
+        # Trigger on bars 8, 16, 24, ... of a section.
+        return (bars_in_section + 1) % 8 == 0
+
+    def _play_phrase_transition_fill(self, state: Dict[str, Any], beat: int, sub_beat: int, intensity: int) -> None:
+        """Play tasteful fills when approaching phrase boundaries."""
+        section = state.get("jam_section", "")
+        fill_probs = {
+            "INTRO": 0.20,
+            "GROOVE_ESTABLISH": 0.45,
+            "CONVERSATION": 0.65,
+            "SPOTLIGHT": 0.70,
+            "RETURN_GROOVE": 0.50,
+            "OUTRO": 0.25,
+        }
+
+        final_fill_prob = fill_probs.get(section, 0.45) * get_drum_phrase_fill_multiplier(self.style)
+
+        if random.random() > final_fill_prob:
+            return
+
+        # Simple descending tom cadence through the last beat.
+        note_by_sub = {
+            0: DRUM_MAP["snare"],
+            3: DRUM_MAP["high_tom"],
+            6: DRUM_MAP["mid_tom"],
+            9: DRUM_MAP["low_tom"],
+        }
+        note = note_by_sub.get(sub_beat, DRUM_MAP["snare"])
+        vel = int(intensity * (0.85 if sub_beat == 0 else 1.0))
+        self._play_drum_hit(note, vel, beat, sub_beat)
 
     def _generate_fill_hit(self, beat: int, sub_beat: int, state: Dict[str, Any], intensity: int):
         """Snare and Tom based builds/fills."""
@@ -340,9 +387,10 @@ class VirtualDrummer(VirtualInstrumentalist):
         return None
 
     def get_scrolling_visual(self) -> str:
-        if not hasattr(self, "rolling_visual_history"): return "[bold green]▶[/]"
-        history = " ".join(list(self.rolling_visual_history))
-        return f"[bold green]▶[/] {history}" if history else "[bold green]▶[/]"
+        from jam_shed.tui.visual import render_scrolling_visual
+        if not hasattr(self, "rolling_visual_history"):
+            return "[bold green]▶[/]"
+        return render_scrolling_visual(self.rolling_visual_history)
 
 class DrumShedAgent(VirtualDrummer):
     """Specialized Drummer for Shed Mode (TradingSolos)."""

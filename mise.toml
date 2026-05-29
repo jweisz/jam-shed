@@ -1,0 +1,7 @@
+[tasks.start]
+description = "Run Jam Shed TUI app"
+run = "uv run python -m jam_shed.tui.app"
+
+[tasks.test]
+description = "Run test suite"
+run = "uv run pytest -q"

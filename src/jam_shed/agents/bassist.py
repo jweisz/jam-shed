@@ -4,6 +4,7 @@ VirtualBassist - AI bass player with style-based playing and kick-following.
 from typing import Dict, Any
 import random
 from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
+from jam_shed.agents.style_calibration import get_bass_tone_weights
 
 
 class VirtualBassist(VirtualInstrumentalist):
@@ -25,10 +26,35 @@ class VirtualBassist(VirtualInstrumentalist):
         self.follow_drummer = True
         self.drummer_name = "Drummer"
 
+    def _resolve_drummer_history_key(self) -> str | None:
+        """Find the drummer key in shared history, tolerant of naming variants."""
+        if self.drummer_name in self.brain.agent_history:
+            return self.drummer_name
+        for name in self.brain.agent_history:
+            if "drum" in name.lower():
+                return name
+        return None
+
+    def _get_tone_weights(self, state: Dict[str, Any]) -> tuple[float, float, float]:
+        """Return (root, fifth, other) note-choice weights by Jam section role."""
+        if not state.get("is_jam_mode"):
+            return (0.6, 0.3, 0.1)
+
+        section = state.get("jam_section", "")
+        current_soloist = state.get("current_soloist", "")
+        return get_bass_tone_weights(
+            self.style,
+            section,
+            is_supporting_spotlight=(section == "SPOTLIGHT" and current_soloist != self.name),
+        )
+
     def tick(self, state: Dict[str, Any], beat: int, sub_beat: int) -> None:
         """Called 12 times per beat. Overrides base to include kick-following logic."""
         if not self.is_running:
             return
+
+        if sub_beat == 0:
+            self.update_endurance_from_state(state)
 
         # Check if we should play based on motif
         step_size = 12 // self.subdivision
@@ -36,12 +62,13 @@ class VirtualBassist(VirtualInstrumentalist):
 
         # Listening: Did the drummer just play a kick?
         kick_detect = False
-        if self.follow_drummer and self.drummer_name in self.brain.agent_history:
+        drummer_key = self._resolve_drummer_history_key()
+        if self.follow_drummer and drummer_key:
             total_ticks_per_bar = self.beats_per_bar * 12
             abs_tick = (self.brain.current_bar * total_ticks_per_bar + beat * 12 + sub_beat) % self.brain.total_history_ticks
 
             # Check current tick for kick (36)
-            hits = self.brain.agent_history[self.drummer_name][abs_tick]
+            hits = self.brain.agent_history[drummer_key][abs_tick]
             if any(h[0] == 36 for h in hits):
                 kick_detect = True
 
@@ -88,12 +115,12 @@ class VirtualBassist(VirtualInstrumentalist):
             if not notes: return
             note = random.choice(notes)
         else:
-            # Bass Logic:
-            # 60% Root, 30% Fifth, 10% Other Chord Tones
+            # Bass Logic varies by section (Conversation vs Return Groove etc).
+            root_w, fifth_w, _other_w = self._get_tone_weights(state)
             r = random.random()
-            if r < 0.6:
+            if r < root_w:
                 note = chord_notes[0] # Root
-            elif r < 0.9 and len(chord_notes) > 2:
+            elif r < (root_w + fifth_w) and len(chord_notes) > 2:
                 note = chord_notes[2] # Fifth (typically index 2 in simple triads/7ths)
             else:
                 note = random.choice(chord_notes)
@@ -101,6 +128,12 @@ class VirtualBassist(VirtualInstrumentalist):
         velocity = int(state.get("intensity", 80) * self.reactivity)
         if ghost:
             velocity = int(velocity * 0.5)
+
+        # In RETURN_GROOVE, emphasize pocket on downbeats.
+        if state.get("is_jam_mode") and state.get("jam_section") == "RETURN_GROOVE":
+            if sub_beat == 0 and beat in [0, 2]:
+                velocity = int(velocity * 1.1)
+
         velocity = max(40, min(100, velocity))
 
         # Send Note On
@@ -110,6 +143,11 @@ class VirtualBassist(VirtualInstrumentalist):
         # Schedule Note Off (longer for bass)
         import threading
         duration = 0.25
+        if state.get("is_jam_mode"):
+            if state.get("jam_section") == "CONVERSATION":
+                duration = 0.20
+            elif state.get("jam_section") == "RETURN_GROOVE":
+                duration = 0.30
         timer = threading.Timer(
             duration,
             lambda: self._note_off_with_cleanup(note, timer)
@@ -122,6 +160,7 @@ class VirtualBassist(VirtualInstrumentalist):
         if grid_idx not in self.pattern:
             self.pattern[grid_idx] = []
         self.pattern[grid_idx].append((note, velocity))
+        self.buffered_scrolling_hits.append(note)
         self.brain.log_agent_activity(self.name, beat, sub_beat, note, velocity)
 
         if self.on_play_callback:

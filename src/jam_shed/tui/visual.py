@@ -24,6 +24,33 @@ HIT_COLORS = {
 }
 
 
+def render_scrolling_visual(history: deque) -> str:
+    """Render a rolling_visual_history deque as a colored Textual markup string.
+
+    Dots and bar separators are rendered dim; all hit labels (e.g. 'HH', 'N ')
+    are rendered bold white for maximum contrast against the dark background.
+
+    Args:
+        history: deque of 2-char symbol strings (e.g. ``'. '``, ``'| '``, ``'HH'``)
+
+    Returns:
+        Textual markup string starting with a green play marker.
+    """
+    if not history:
+        return "[bold green]▶[/]"
+
+    parts = []
+    for symbol in history:
+        if symbol == "| ":
+            parts.append("[dim]| [/]")
+        elif symbol == ". ":
+            parts.append("[dim]. [/]")
+        else:
+            parts.append(f"[bold white]{symbol}[/]")
+
+    return "[bold green]▶[/] " + " ".join(parts)
+
+
 def render_groove_pattern_rich(
     pattern: Dict[int, List[Tuple[int, int]]],
     current_bar_beat: int,

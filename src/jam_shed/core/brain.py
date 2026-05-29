@@ -160,8 +160,8 @@ class RhythmicBrain:
 
     def get_scrolling_visual(self) -> str:
         """Returns the scrolling history as a single-line string with a fixed 'now' marker."""
-        history = " ".join(list(self.rolling_visual_history))
-        return f"[bold green]▶[/] {history}" if history else "[bold green]▶[/]"
+        from jam_shed.tui.visual import render_scrolling_visual
+        return render_scrolling_visual(self.rolling_visual_history)
 
     def start_listening(self) -> None:
         """Start listening mode to record human playing."""
@@ -515,6 +515,27 @@ class RhythmicBrain:
             "intensity": max(60, self.intensity),
             "density": min(1.0, len(self.groove_pattern) / 48.0),
         }
+
+    def get_agent_energy(self) -> float:
+        """Returns a 0-127 energy value based on recent agent note activity.
+
+        Scans the last beat's worth of ticks in agent_history and returns the
+        average velocity across all agents, or 0 if no recent activity exists.
+        This is used by the Jam mode energy visualizer so that AI-driven notes
+        register as energy even when the human is not playing.
+        """
+        recent_velocities: list = []
+        total_ticks_per_bar = self.beats_per_bar * TICKS_PER_BEAT
+        current_abs = (self.current_bar * total_ticks_per_bar) % self.total_history_ticks
+        # Scan the last full beat (TICKS_PER_BEAT ticks) in the ring buffer
+        for offset in range(TICKS_PER_BEAT):
+            tick = (current_abs - 1 - offset) % self.total_history_ticks
+            for history in self.agent_history.values():
+                for _note, velocity in history[tick]:
+                    recent_velocities.append(velocity)
+        if not recent_velocities:
+            return 0.0
+        return sum(recent_velocities) / len(recent_velocities)
 
     def get_state(self) -> Dict[str, Any]:
         """

@@ -1,6 +1,7 @@
 import random
 from typing import Dict, Any
 from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
+from jam_shed.agents.style_calibration import get_lead_section_multiplier
 from jam_shed.core.theory import MusicTheory
 
 
@@ -18,6 +19,29 @@ class VirtualLeadGuitarist(VirtualInstrumentalist):
         self.subdivision = 4  # 16th notes for faster playing
         self.complexity_bias = 0.6  # More complex, expressive lines
         self.reactivity = 0.9  # Very responsive to musical context
+
+    def calculate_play_probability(self, state: Dict[str, Any]) -> float:
+        """Section-aware lead behavior for Jam mode role shaping."""
+        prob = super().calculate_play_probability(state)
+        if not state.get("is_jam_mode"):
+            return prob
+
+        section = state.get("jam_section", "")
+        current_soloist = state.get("current_soloist", "")
+
+        if section in ["INTRO", "GROOVE_ESTABLISH", "OUTRO"]:
+            prob *= 0.72
+        elif section == "CONVERSATION":
+            prob *= 0.92
+        elif section == "SPOTLIGHT":
+            if current_soloist == self.name:
+                prob = min(0.98, prob + 0.18)
+            else:
+                prob *= 0.62
+
+        prob *= get_lead_section_multiplier(self.style, section)
+
+        return max(0.1, min(0.98, prob))
 
     def play_note(self, state: Dict[str, Any], beat: int, sub_beat: int, ghost: bool = False) -> None:
         """Play a melodic solo note, prioritizing chord tones (Chord-Tone Soloing)."""
@@ -63,6 +87,7 @@ class VirtualLeadGuitarist(VirtualInstrumentalist):
         if grid_idx not in self.pattern:
             self.pattern[grid_idx] = []
         self.pattern[grid_idx].append((note, velocity))
+        self.buffered_scrolling_hits.append(note)
         self.brain.log_agent_activity(self.name, beat, sub_beat, note, velocity)
 
         if self.on_play_callback:

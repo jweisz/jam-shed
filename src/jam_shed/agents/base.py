@@ -59,6 +59,14 @@ class VirtualInstrumentalist:
         self.complexity_bias = 0.5
         self.on_play_callback: Optional[callable] = None
 
+        # Jam personality/endurance model
+        self.endurance = 1.0
+        self.personality_aggression = 0.5
+        self.personality_restraint = 0.5
+        self.endurance_drain_rate = 0.06
+        self.endurance_recovery_rate = 0.10
+        self._rest_ticks_remaining = 0
+
         # Linear Scrolling Visualization
         from collections import deque
         self.rolling_visual_history: deque = deque(maxlen=64)
@@ -169,6 +177,20 @@ class VirtualInstrumentalist:
         if not self.is_running or self.mode == AgentMode.SILENT:
             return
 
+        # Update endurance once per beat.
+        if sub_beat == 0:
+            self.update_endurance_from_state(state)
+            if state.get("is_jam_mode"):
+                space = max(0.0, min(1.0, state.get("section_space_bias", 0.3)))
+                # Lower endurance and higher space bias encourage intentional rests.
+                rest_prob = max(0.0, min(0.75, space * (1.15 - self.endurance)))
+                if random.random() < rest_prob:
+                    self._rest_ticks_remaining = 12
+
+        if self._rest_ticks_remaining > 0:
+            self._rest_ticks_remaining -= 1
+            return
+
         step_size = 12 // self.subdivision
         if sub_beat % step_size == 0:
             step_in_beat = sub_beat // step_size
@@ -205,7 +227,44 @@ class VirtualInstrumentalist:
         elif len(recent_agents) >= 2:
             prob -= 0.15 # Back off, room is crowded
 
+        # In Jam mode, endurance and personality influence pacing.
+        if state.get("is_jam_mode"):
+            section_density = max(0.0, min(1.0, state.get("section_density_target", 0.5)))
+            section_space = max(0.0, min(1.0, state.get("section_space_bias", 0.3)))
+
+            # Density target scales overall activity by section.
+            prob *= (0.5 + (0.9 * section_density))
+
+            if self.endurance < 0.25:
+                prob *= 0.45 + (0.2 * self.personality_aggression)
+            elif self.endurance < 0.5:
+                prob *= 0.75 + (0.2 * self.personality_aggression)
+
+            # Restraint encourages leaving space at higher energies.
+            energy = max(0.0, min(1.0, state.get("energy_norm", 0.5)))
+            prob -= self.personality_restraint * energy * 0.18
+            prob -= section_space * 0.12
+
         return max(0.1, min(0.95, prob))
+
+    def update_endurance_from_state(self, state: Dict[str, Any]) -> None:
+        """Update endurance using tempo/energy/complexity pressure and recovery."""
+        bpm = max(40.0, float(state.get("bpm", 120.0)))
+        tempo_norm = max(0.0, min(1.0, (bpm - 40.0) / 200.0))
+        energy = max(0.0, min(1.0, state.get("energy_norm", 0.5)))
+        complexity = max(0.0, min(1.0, state.get("complexity", 0.3)))
+
+        # Role pressure: soloists deplete faster than accompanists.
+        role_pressure = 1.2 if self.mode == AgentMode.SOLO else 0.9
+
+        cost = self.endurance_drain_rate * role_pressure * (
+            0.45 * energy +
+            0.35 * tempo_norm +
+            0.20 * complexity
+        )
+        recovery = self.endurance_recovery_rate * (1.0 - energy) * (0.7 + (0.3 * self.personality_restraint))
+
+        self.endurance = max(0.0, min(1.0, self.endurance - cost + recovery))
 
 
     def get_recent_activity(self, beat: int, sub_beat: int, window_ticks: int = 12) -> List[str]:
@@ -259,11 +318,44 @@ class VirtualInstrumentalist:
             self.pattern[grid_idx] = []
         self.pattern[grid_idx].append((note, velocity))
 
+        # Buffer for scrolling visual
+        self.buffered_scrolling_hits.append(note)
+
         # Log to shared history in brain for inter-agent "listening"
         self.brain.log_agent_activity(self.name, beat, sub_beat, note, velocity)
 
         if self.on_play_callback:
             self.on_play_callback(self.name, note)
+
+    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: list = None) -> None:
+        """Advance the melodic scrolling visual history by one 16th note step."""
+        step_idx = sub_beat // 3
+        current_global_step = (bar_beat * 4) + step_idx
+
+        if current_global_step == self.last_step_idx:
+            # Update existing dot if a note fired mid-step
+            if self.buffered_scrolling_hits and self.rolling_visual_history:
+                if self.rolling_visual_history[0] == ". ":
+                    self.rolling_visual_history[0] = "N "
+                    self.buffered_scrolling_hits.clear()
+            return
+
+        self.last_step_idx = current_global_step
+
+        symbol = ". "
+        if self.buffered_scrolling_hits:
+            symbol = "N "
+            self.buffered_scrolling_hits.clear()
+
+        if bar_beat == 0 and step_idx == 0:
+            self.rolling_visual_history.appendleft("| ")
+
+        self.rolling_visual_history.appendleft(symbol)
+
+    def get_scrolling_visual(self) -> str:
+        """Returns the scrolling history as a single-line string with a fixed 'now' marker."""
+        from jam_shed.tui.visual import render_scrolling_visual
+        return render_scrolling_visual(self.rolling_visual_history)
 
     def _note_off_with_cleanup(self, note: int, timer: threading.Timer) -> None:
         """Send note off and remove timer from active list."""

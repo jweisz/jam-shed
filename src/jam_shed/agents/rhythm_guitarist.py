@@ -30,6 +30,9 @@ class VirtualRhythmGuitarist(VirtualInstrumentalist):
         """Called 12 times per beat. Decides when to strum based on the pattern."""
         if not self.is_running: return
 
+        if sub_beat == 0:
+            self.update_endurance_from_state(state)
+
         current_bar = self.brain.current_bar
         grid_idx = (beat * 12) + sub_beat
 
@@ -97,4 +100,5 @@ class VirtualRhythmGuitarist(VirtualInstrumentalist):
 
         # Log
         self.brain.log_agent_activity(self.name, beat, sub_beat, chord_notes[0], velocity)
+        self.buffered_scrolling_hits.append(chord_notes[0])
         if self.on_play_callback: self.on_play_callback(self.name, chord_notes[0])

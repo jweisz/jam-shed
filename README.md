@@ -47,6 +47,7 @@ python scripts/download_soundfonts.py
 1. **Connect your MIDI device** (keyboard, drum pads, etc.)
 
 2. **Launch the app:**
+
 ```bash
 uv run python -m jam_shed.tui.app
 # or if installed globally:
@@ -67,9 +68,11 @@ uv run python -m jam_shed.tui.app
 ## Modes
 
 ### Shed Mode
+
 Practice mode where AI agents listen to your playing and learn your grooves. The AI builds rhythmic patterns based on your performance and can play them back.
 
 ### Jam Mode
+
 (Coming soon) Full band coordination with structured trading and call-and-response.
 
 ## AI Virtual Musicians
@@ -85,6 +88,7 @@ All virtual instrumentalists inherit from `VirtualInstrumentalist` and can be co
 ### Musical Styles
 
 Each agent can play in different styles that affect their playing characteristics:
+
 - **Rock** - Straight-ahead, driving rhythms
 - **Jazz** - Complex, syncopated patterns
 - **Hip-Hop** - Laid-back, groove-oriented
@@ -139,16 +143,19 @@ pytest tests/ -v
 ## Troubleshooting
 
 **MIDI device not showing up?**
+
 - Make sure your MIDI device is connected before launching the app
 - On macOS, check Audio MIDI Setup to verify the device is recognized
 - Try restarting the app after connecting the device
 
 **No sound?**
+
 - If using "Local (Fluidsynth)", make sure soundfonts are downloaded
 - Check that your MIDI output device has sound enabled
 - Verify volume levels in your system and on the output device
 
 **Agents not playing?**
+
 - Make sure you've enabled agents via the checkboxes
 - Verify MIDI output is connected
 - Check that you're in Shed mode and have started playing
@@ -157,13 +164,14 @@ pytest tests/ -v
 
 Contributions welcome! Please feel free to submit issues or pull requests.
 
-##License
+## License
 
 MIT License - see LICENSE file for details
 
 ## Credits
 
 Built with:
+
 - [Textual](https://textual.textualize.io/) - TUI framework
 - [python-rtmidi](https://spotlightkid.github.io/python-rtmidi/) - MIDI I/O
 - [FluidSynth](https://www.fluidsynth.org/) - Software synthesizer

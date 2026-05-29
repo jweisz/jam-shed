@@ -4,6 +4,10 @@ VirtualKeyboardist - AI keyboard player that plays chords and melodies.
 import random
 from typing import Dict, Any, List, Optional
 from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle, AgentMode
+from jam_shed.agents.style_calibration import (
+    get_keys_conversation_chord_probability,
+    get_keys_spotlight_support_chord_probability,
+)
 from jam_shed.midi.engine import MIDIEngine
 from jam_shed.core.brain import RhythmicBrain
 from jam_shed.core.theory import MusicTheory
@@ -82,6 +86,9 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         if not self.midi.is_out_open():
             return
 
+        section = state.get("jam_section", "") if state.get("is_jam_mode") else ""
+        current_soloist = state.get("current_soloist", "")
+
         # Decide: chord or single note
         if self.mode == AgentMode.SOLO:
             #Solo mode: more single notes melody
@@ -89,6 +96,17 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         else:
             # Accompany mode: more chords
             play_chord = random.random() < self.voice_density
+
+        if section in ["INTRO", "OUTRO", "GROOVE_ESTABLISH"]:
+            # Establish harmony and space with comping.
+            play_chord = random.random() < 0.9
+        elif section == "CONVERSATION":
+            # Style-sensitive comping vs single-note motion in conversation.
+            play_chord = random.random() < get_keys_conversation_chord_probability(self.style)
+        elif section == "SPOTLIGHT" and current_soloist != self.name:
+            # Support role during someone else's spotlight.
+            play_chord = random.random() < get_keys_spotlight_support_chord_probability(self.style)
+            ghost = True
 
         if play_chord:
             self._play_chord(state, beat, sub_beat, ghost)
@@ -149,6 +167,9 @@ class VirtualKeyboardist(VirtualInstrumentalist):
             # Log to shared history in brain for inter-agent "listening"
             self.brain.log_agent_activity(self.name, beat, sub_beat, note, velocity)
 
+        # Buffer root note for scrolling visual (once per chord event)
+        self.buffered_scrolling_hits.append(chord_notes[0])
+
 
     def _play_melody_note(self, state: Dict[str, Any], beat: int, sub_beat: int, ghost: bool = False) -> None:
         """Play a single melody note from the scale."""
@@ -198,6 +219,7 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         if grid_idx not in self.pattern:
             self.pattern[grid_idx] = []
         self.pattern[grid_idx].append((note, velocity))
+        self.buffered_scrolling_hits.append(note)
 
         if self.on_play_callback:
             self.on_play_callback(self.name, note)

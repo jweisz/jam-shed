@@ -154,15 +154,14 @@ def test_shed_turn1_human_groove_ai_silent(shed_session):
     assert "AI Listening" in session.current_phase
     assert drum_partner.mode == AgentMode.SILENT
 
-    # Advance through remaining bars of Turn 1 (bars 2 and 3)
-    # Note: bar 4 will transition to Turn 2, so we only check bars 2-3
-    for bar in range(2):
+    # Advance through remaining bars of Turn 1 (bars 2-4)
+    for bar in range(3):
         _advance_bars(session, 1)
         assert session.current_soloist == "Human", f"Soloist wrong at bar {session.bars_elapsed}"
         assert drum_partner.mode == AgentMode.SILENT, f"AI not silent at bar {session.bars_elapsed}"
 
-    # At this point bars_elapsed should be 3 (last bar of Turn 1)
-    assert session.bars_elapsed == 3
+    # At this point bars_elapsed should be 4 (last bar of Turn 1)
+    assert session.bars_elapsed == 4
 
 
 def test_shed_turn2_human_fill_ai_groove(shed_session):
@@ -170,21 +169,21 @@ def test_shed_turn2_human_fill_ai_groove(shed_session):
     session = shed_session
     drum_partner = session.agents[0]
 
-    # Advance from bar 1 into Turn 2 (bar 4 is the first bar of Turn 2)
-    _advance_bars(session, 3)
-    assert session.bars_elapsed == 4
+    # Advance from bar 1 into Turn 2 (bar 5 is the first bar of Turn 2)
+    _advance_bars(session, 4)
+    assert session.bars_elapsed == 5
 
     assert session.current_soloist == "Drum Partner"
     assert "HUMAN FILL" in session.current_phase
     assert drum_partner.mode == AgentMode.SOLO
 
-    # Verify Turn 2 persists for remaining 3 bars (bars 5, 6, 7)
+    # Verify Turn 2 persists for remaining 3 bars (bars 6, 7, 8)
     for i in range(3):
         _advance_bars(session, 1)
         assert "HUMAN FILL" in session.current_phase, f"Phase wrong at bar {session.bars_elapsed}"
         assert drum_partner.mode == AgentMode.SOLO, f"AI not SOLO at bar {session.bars_elapsed}"
 
-    assert session.bars_elapsed == 7
+    assert session.bars_elapsed == 8
 
 
 def test_shed_turn3_ai_fill_human_groove(shed_session):
@@ -192,21 +191,21 @@ def test_shed_turn3_ai_fill_human_groove(shed_session):
     session = shed_session
     drum_partner = session.agents[0]
 
-    # Advance from bar 1 into Turn 3 (bar 8 is the first bar of Turn 3)
-    _advance_bars(session, 7)
-    assert session.bars_elapsed == 8
+    # Advance from bar 1 into Turn 3 (bar 9 is the first bar of Turn 3)
+    _advance_bars(session, 8)
+    assert session.bars_elapsed == 9
 
     assert session.current_soloist == "Drum Partner"
     assert "AI FILL" in session.current_phase
     assert drum_partner.mode == AgentMode.SOLO
 
-    # Verify Turn 3 persists for remaining 3 bars (bars 9, 10, 11)
+    # Verify Turn 3 persists for remaining 3 bars (bars 10, 11, 12)
     for i in range(3):
         _advance_bars(session, 1)
         assert "AI FILL" in session.current_phase, f"Phase wrong at bar {session.bars_elapsed}"
         assert drum_partner.mode == AgentMode.SOLO, f"AI not SOLO at bar {session.bars_elapsed}"
 
-    assert session.bars_elapsed == 11
+    assert session.bars_elapsed == 12
 
 
 def test_shed_cycle_resets_after_12_bars(shed_session):
@@ -214,8 +213,8 @@ def test_shed_cycle_resets_after_12_bars(shed_session):
     session = shed_session
     drum_partner = session.agents[0]
 
-    # Advance through full 12-bar cycle (bars_elapsed=1 -> need 11 more bars)
-    _advance_bars(session, 11)
+    # Advance through full 12-bar cycle and one boundary beat into next cycle.
+    _advance_bars(session, 12)
 
     # Cycle should have reset; bars_elapsed is now back in Turn 1 range
     assert "AI Listening" in session.current_phase
@@ -227,8 +226,10 @@ def test_shed_bars_left_in_turn(shed_session):
     """Test that bars_left_in_turn counts down correctly within each turn."""
     session = shed_session
 
-    # After fixture, bars_elapsed=1, bars_left_in_turn should be 3
-    # Turn 1: bars_left counts down 3, 2, 1
+    # After fixture, bars_elapsed=1, bars_left_in_turn should be 4
+    # Turn 1: bars_left counts down 4, 3, 2, 1
+    assert session.bars_left_in_turn == 4
+    _advance_bars(session, 1)
     assert session.bars_left_in_turn == 3
     _advance_bars(session, 1)
     assert session.bars_left_in_turn == 2
@@ -258,7 +259,7 @@ def test_shed_bars_left_in_turn(shed_session):
 
 def test_shed_leadin_is_4_beats():
     """Test that the lead-in countdown is exactly 4 beats, with
-    the 4th beat triggering the transition to the jam."""
+    BAR 1 starting on the beat after the 4th count-in tick."""
     session = JamSession()
     session.start_trading(bars=4)
     session.start_first_hit()
@@ -270,7 +271,11 @@ def test_shed_leadin_is_4_beats():
         session.notify_beat_elapsed()
         assert session.is_leadin is True, f"Lead-in ended too early at beat {i}"
 
-    # Beat 4 triggers the transition (beats_elapsed >= beats_per_bar)
+    # Beat 4 is still count-in (transition is deferred to the next beat)
+    session.notify_beat_elapsed()
+    assert session.is_leadin is True
+
+    # Next beat starts BAR 1 / BEAT 1
     session.notify_beat_elapsed()
     assert session.is_leadin is False
     assert session.bars_elapsed == 1  # First bar started
@@ -294,8 +299,8 @@ def test_shed_phase_transitions_emit_callbacks():
     for _ in range(5):
         session.notify_beat_elapsed()
 
-    # Advance through full 12-bar cycle (11 more bars from bar 1)
-    _advance_bars(session, 11)
+    # Advance through full 12-bar cycle and into next cycle boundary.
+    _advance_bars(session, 12)
 
     # Should see transitions: Turn 1 -> Turn 2, Turn 2 -> Turn 3, Turn 3 -> Turn 1
     assert any("HUMAN FILL" in p for p in phases_seen), f"Missing HUMAN FILL phase: {phases_seen}"
@@ -339,7 +344,7 @@ def test_groove_cycle_length():
 
 
 def test_groove_human_turn_ai_silent(groove_session):
-    """Turn 1 (bars 0-3): Human plays groove, AI is SILENT."""
+    """Turn 1 (bars 1-4): Human plays groove, AI is SILENT."""
     session = groove_session
     drum_partner = session.agents[0]
 
@@ -348,27 +353,27 @@ def test_groove_human_turn_ai_silent(groove_session):
     assert drum_partner.mode == AgentMode.SILENT
 
     # Advance through remaining bars of human turn
-    for _ in range(2):
+    for _ in range(3):
         _advance_bars(session, 1)
         assert drum_partner.mode == AgentMode.SILENT
 
-    assert session.bars_elapsed == 3
+    assert session.bars_elapsed == 4
 
 
 def test_groove_ai_turn_copies(groove_session):
-    """Turn 2 (bars 4-7): AI copies the human's groove."""
+    """Turn 2 (bars 5-8): AI copies the human's groove."""
     session = groove_session
     drum_partner = session.agents[0]
 
     # Advance into AI turn
-    _advance_bars(session, 3)
-    assert session.bars_elapsed == 4
+    _advance_bars(session, 4)
+    assert session.bars_elapsed == 5
 
     assert session.current_soloist == "Drum Partner"
     assert "AI GROOVE" in session.current_phase
     assert drum_partner.mode == AgentMode.SOLO
 
-    # AI continues through 4 bars
+    # AI continues through remaining bars of turn
     for _ in range(3):
         _advance_bars(session, 1)
         assert "AI GROOVE" in session.current_phase
@@ -380,8 +385,8 @@ def test_groove_cycle_resets_after_8_bars(groove_session):
     session = groove_session
     drum_partner = session.agents[0]
 
-    # Advance through full 8-bar cycle (7 more from bar 1)
-    _advance_bars(session, 7)
+    # Advance through full 8-bar cycle and into the next boundary.
+    _advance_bars(session, 8)
 
     assert "YOUR GROOVE" in session.current_phase
     assert session.current_soloist == "Human"
