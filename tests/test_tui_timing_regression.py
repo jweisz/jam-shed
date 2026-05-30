@@ -40,3 +40,16 @@ def test_jam_sidebar_lists_bassist_checkbox():
             ]
 
     asyncio.run(run_check())
+
+
+def test_note_label_uses_drum_mapping_for_drummer():
+    assert JamShedApp._note_label_for_log("Drummer", 48) == "H-TOM"
+
+
+def test_note_label_uses_pitched_mapping_for_keyboardist():
+    # MIDI 48 is C3; this must not be mapped to drum high tom for pitched agents.
+    assert JamShedApp._note_label_for_log("Keyboardist", 48) == "C3"
+
+
+def test_note_label_uses_drum_mapping_when_channel_is_drum_channel():
+    assert JamShedApp._note_label_for_log("Lead Guitar", 42, channel=9) == "HH-CL"

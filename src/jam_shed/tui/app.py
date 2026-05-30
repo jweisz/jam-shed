@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 import threading
@@ -59,6 +59,7 @@ class JamShedApp(App):
         41: "F-TOM", 45: "M-TOM", 48: "H-TOM",
         49: "CRASH1", 57: "CRASH2", 51: "RIDE"
     }
+    DRUM_AGENT_NAMES = {"DRUMMER", "MANUAL", "ME", "CLICK", "SIGNAL"}
 
     CSS = """
     Screen {
@@ -157,6 +158,7 @@ class JamShedApp(App):
         margin-top: 0;
         margin-bottom: 0;
         height: 3;
+        padding: 0;
     }
     Checkbox {
         padding: 0;
@@ -322,18 +324,28 @@ class JamShedApp(App):
         margin-top: 0;
         grid-size: 3;
         grid-gutter: 0 1;
+        width: 100%;
+        overflow: hidden;
     }
     #jam_controls .settings-col {
         width: 1fr;
-        height: auto;
+        height: 5;
+        min-width: 0;
+        overflow: hidden;
+        border: solid $accent;
+        align: left middle;
     }
     #jam_controls .flow-grid {
         height: auto;
         margin-top: 0;
     }
     #jam_controls Select {
-        width: 100%;
+        width: 1fr;
         height: 3;
+        min-width: 0;
+        overflow: hidden;
+        padding: 0;
+        margin: 0;
     }
     #jam_controls Checkbox {
         width: auto;
@@ -484,6 +496,9 @@ class JamShedApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("space", "toggle_session", "Start/Stop"),
+        Binding("1", "mode_groove", "Groove", priority=True),
+        Binding("2", "mode_shed", "Shed", priority=True),
+        Binding("3", "mode_jam", "Jam", priority=True),
         Binding("9", "toggle_click", "Audible Click", priority=True),
         Binding("0", "toggle_visual_click", "Visual Click", priority=True),
         Binding("r", "midi_reset", "Reset"),
@@ -599,15 +614,12 @@ class JamShedApp(App):
             with Vertical(id="jam_controls", classes="hidden"):
                 yield Label("JAM CONTROL", classes="status-active")
                 with Grid(classes="settings-grid"):
-                    with Vertical(classes="settings-col"):
-                        yield Label("Time")
+                    with Horizontal(classes="settings-col"):
                         yield Select([("4/4", "4/4"), ("3/4", "3/4"), ("6/8", "6/8"), ("7/8", "7/8"), ("5/4", "5/4")],
                                      id="select_time_sig", value="4/4")
-                    with Vertical(classes="settings-col"):
-                        yield Label("Key")
+                    with Horizontal(classes="settings-col"):
                         yield Select([(k, k) for k in MusicTheory.KEYS.keys()], id="select_key", value="C")
-                    with Vertical(classes="settings-col"):
-                        yield Label("Scale")
+                    with Horizontal(classes="settings-col"):
                         yield Select([(s, s) for s in MusicTheory.SCALE_OPTIONS], id="select_scale", value="Major (Ionian)")
 
                 with Vertical(classes="settings-row hidden"):
@@ -740,15 +752,61 @@ class JamShedApp(App):
         """MIDI panic via 'r' key."""
         self.midi_panic()
 
-    def _select_radio_mode(self, mode_id: str) -> None:
-        """Programmatically select a session mode radio button."""
+    def action_palette(self) -> None:
+        """Open the command palette via 'p' key."""
         try:
-            for btn in self.query_one("#mode_select", RadioSet).query(RadioButton):
-                if btn.id == mode_id:
-                    btn.press()  # Textual's correct API to activate a RadioButton
-                    break
+            self.action_command_palette()
         except Exception:
             pass
+
+    def _set_session_mode(self, mode: str) -> None:
+        """Apply session mode and keep mode radio + panel visibility in sync."""
+        mode_to_id = {
+            "groove": "mode_groove",
+            "shed": "mode_shed",
+            "jam": "mode_jam",
+        }
+        if mode not in mode_to_id:
+            return
+
+        self._session_mode = mode
+        try:
+            self.query_one(f"#{mode_to_id[mode]}", RadioButton).value = True
+        except Exception:
+            pass
+
+        try:
+            controls = self.query_one("#jam_controls")
+            if mode == "jam":
+                controls.remove_class("hidden")
+            else:
+                controls.add_class("hidden")
+        except Exception:
+            pass
+
+        self._update_mode_visibility()
+
+    def _select_radio_mode(self, mode_id: str) -> None:
+        """Programmatically select a session mode radio button."""
+        mode = {
+            "mode_groove": "groove",
+            "mode_shed": "shed",
+            "mode_jam": "jam",
+        }.get(mode_id)
+        if mode:
+            self._set_session_mode(mode)
+
+    def action_mode_groove(self) -> None:
+        """Switch session mode to Groove via '1' key."""
+        self._select_radio_mode("mode_groove")
+
+    def action_mode_shed(self) -> None:
+        """Switch session mode to Shed via '2' key."""
+        self._select_radio_mode("mode_shed")
+
+    def action_mode_jam(self) -> None:
+        """Switch session mode to Jam via '3' key."""
+        self._select_radio_mode("mode_jam")
 
     # ── Event Handlers ────────────────────────────────────────────────
 
@@ -784,15 +842,8 @@ class JamShedApp(App):
                 pass
 
         elif event.radio_set.id == "mode_select":
-            is_jam = event.pressed.id == "mode_jam"
-            controls = self.query_one("#jam_controls")
-            if is_jam:
-                controls.remove_class("hidden")
-                self._session_mode = "jam"
-            else:
-                controls.add_class("hidden")
-                self._session_mode = "groove" if event.pressed.id == "mode_groove" else "shed"
-            self._update_mode_visibility()
+            mode = "jam" if event.pressed.id == "mode_jam" else ("groove" if event.pressed.id == "mode_groove" else "shed")
+            self._set_session_mode(mode)
 
     def _update_mode_visibility(self):
         """Show/hide TURN/PHASE based on selected mode."""
@@ -1000,9 +1051,25 @@ class JamShedApp(App):
         except Exception:
             pass
 
-    def log_agent_activity(self, agent_name: str, note: int):
+    @staticmethod
+    def _format_pitched_note_name(note: int) -> str:
+        """Format a MIDI note number as a pitched note name with octave."""
+        note_name = MusicTheory.get_note_name(note)
+        octave = (note // 12) - 1
+        return f"{note_name}{octave}"
+
+    @classmethod
+    def _note_label_for_log(cls, agent_name: str, note: int, channel: Optional[int] = None) -> str:
+        """Return the proper note label for logs based on drum vs pitched context."""
+        normalized_name = (agent_name or "").strip().upper()
+        is_drum_event = channel == 9 or normalized_name in cls.DRUM_AGENT_NAMES
+        if is_drum_event:
+            return cls.DRUM_NAMES.get(note, f"{note}")
+        return cls._format_pitched_note_name(note)
+
+    def log_agent_activity(self, agent_name: str, note: int, channel: Optional[int] = None):
         self.safe_call(self.blink_led, "led_out")
-        name = self.DRUM_NAMES.get(note, f"{note}")
+        name = self._note_label_for_log(agent_name, note, channel)
         self.safe_call(self.update_log, f"{agent_name.upper()}: {name}")
 
     # ── Display Updates ───────────────────────────────────────────────
@@ -1496,7 +1563,7 @@ class JamShedApp(App):
         for note in note_list:
             msg_on = [status_byte, note, random.randint(80, 110)]
 
-            self.log_agent_activity(agent_name, note)
+            self.log_agent_activity(agent_name, note, channel)
 
             if self.midi.is_out_open():
                 self.midi.send_message(msg_on)
