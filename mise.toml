@@ -5,3 +5,19 @@ run = "uv run python -m jam_shed.tui.app"
 [tasks.test]
 description = "Run test suite"
 run = "uv run pytest -q"
+
+[tasks.typecheck]
+description = "Run mypy type checker"
+run = "uv run mypy src/jam_shed"
+
+[tasks.format]
+description = "Format code with ruff"
+run = "uv run ruff format src tests"
+
+[tasks.lint]
+description = "Lint code with ruff"
+run = "uv run ruff check src tests"
+
+[tasks.lint-fix]
+description = "Fix lint issues with ruff"
+run = "uv run ruff check --fix src tests"

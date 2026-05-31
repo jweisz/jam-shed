@@ -1,16 +1,17 @@
 """
 Agent factory for creating virtual instrumentalists with consistent configuration.
 """
-from typing import Dict, Type
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
+
+from typing import Dict, Optional, Type
+
+from jam_shed.agents.base import PlayingStyle, VirtualInstrumentalist
 from jam_shed.agents.bassist import VirtualBassist
-from jam_shed.agents.lead_guitarist import VirtualLeadGuitarist
-from jam_shed.agents.rhythm_guitarist import VirtualRhythmGuitarist
 from jam_shed.agents.drummer import VirtualDrummer
 from jam_shed.agents.keyboardist import VirtualKeyboardist
-from jam_shed.midi.engine import MIDIEngine
+from jam_shed.agents.lead_guitarist import VirtualLeadGuitarist
+from jam_shed.agents.rhythm_guitarist import VirtualRhythmGuitarist
 from jam_shed.core.brain import RhythmicBrain
-
+from jam_shed.midi.engine import MIDIEngine
 
 # Agent Registry: maps agent type to (Class, default_channel, display_name)
 AGENT_REGISTRY: Dict[str, tuple[Type[VirtualInstrumentalist], int, str]] = {
@@ -31,8 +32,8 @@ class AgentFactory:
         midi_engine: MIDIEngine,
         brain: RhythmicBrain,
         style: PlayingStyle = PlayingStyle.ROCK,
-        name: str = None,
-        channel: int = None
+        name: Optional[str] = None,
+        channel: Optional[int] = None,
     ) -> VirtualInstrumentalist:
         """
         Create a virtual instrumentalist agent.
@@ -59,13 +60,7 @@ class AgentFactory:
         final_name = name if name is not None else default_name
         final_channel = channel if channel is not None else default_channel
 
-        return agent_class(
-            name=final_name,
-            midi_engine=midi_engine,
-            brain=brain,
-            channel=final_channel,
-            style=style
-        )
+        return agent_class(name=final_name, midi_engine=midi_engine, brain=brain, channel=final_channel, style=style)
 
     @staticmethod
     def get_available_agents() -> Dict[str, str]:
@@ -82,7 +77,7 @@ class AgentFactory:
         midi_engine: MIDIEngine,
         brain: RhythmicBrain,
         style: PlayingStyle = PlayingStyle.ROCK,
-        include: list = None
+        include: Optional[list[str]] = None,
     ) -> list[VirtualInstrumentalist]:
         """
         Create a full band of agents.

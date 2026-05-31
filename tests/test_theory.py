@@ -1,7 +1,7 @@
 """
 Tests for jam_shed.theory module.
 """
-import pytest
+
 from jam_shed.core.theory import MusicTheory
 
 
@@ -66,7 +66,7 @@ def test_get_progression_chords_blues():
     # 12-bar blues: I-I-I-I-IV-IV-I-I-V-IV-I-V
     assert chords[0] == ("C", "Major")  # I
     assert chords[4] == ("F", "Major")  # IV
-    assert chords[8] == ("G", "Dom7")   # V
+    assert chords[8] == ("G", "Dom7")  # V
 
 
 def test_get_note_name():

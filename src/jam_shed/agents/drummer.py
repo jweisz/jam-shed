@@ -1,14 +1,15 @@
 """
 VirtualDrummer - AI drummer that plays learned groove patterns.
 """
+
 import random
 import threading
-from typing import Dict, Any, Optional, List, Tuple
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle, AgentMode
-from jam_shed.agents.style_calibration import get_drum_phrase_fill_multiplier
-from jam_shed.midi.engine import MIDIEngine
-from jam_shed.core.brain import RhythmicBrain
+from typing import Any, Dict, List, Optional
 
+from jam_shed.agents.base import AgentMode, PlayingStyle, VirtualInstrumentalist
+from jam_shed.agents.style_calibration import get_drum_phrase_fill_multiplier
+from jam_shed.core.brain import RhythmicBrain
+from jam_shed.midi.engine import MIDIEngine
 
 # GM Drum Map (General MIDI Standard on Channel 10)
 DRUM_MAP = {
@@ -32,19 +33,19 @@ class VirtualDrummer(VirtualInstrumentalist):
         name: str,
         midi_engine: MIDIEngine,
         brain: RhythmicBrain,
-        channel: int = 9, # Drummers always use MIDI channel 10 (index 9)
+        channel: int = 9,  # Drummers always use MIDI channel 10 (index 9)
         style: PlayingStyle = PlayingStyle.ROCK,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name, midi_engine, brain, channel=channel, style=style, **kwargs)
 
         # Drummer settings
         self.subdivision = 4  # 16th resolution
         self.complexity_bias = 0.5
-        self.current_groove_mode = "GROOVE" # GROOVE or FILL
+        self.current_groove_mode = "GROOVE"  # GROOVE or FILL
 
         # Ostinato patterns (set of ticks (0-47))
-        self.kick_ostinato = set()
+        self.kick_ostinato: set[int] = set()
         self.last_ostinato_bar = -1
 
         # Style-specific kit emphasis
@@ -53,13 +54,15 @@ class VirtualDrummer(VirtualInstrumentalist):
 
     def _generate_kick_ostinato(self):
         """Generates a steady 1-bar kick pattern to be used as an ostinato."""
-        self.kick_ostinato = {0} # Always on 1
+        self.kick_ostinato = {0}  # Always on 1
 
         # Add a few more hits based on style
         if self.style == PlayingStyle.ROCK or self.style == PlayingStyle.BLUES:
             # Simple 1 and 3 feel or steady 8ths
-            if random.random() < 0.7: self.kick_ostinato.add(24) # Beat 3
-            if random.random() < 0.3: self.kick_ostinato.add(18) # Beat 2&
+            if random.random() < 0.7:
+                self.kick_ostinato.add(24)  # Beat 3
+            if random.random() < 0.3:
+                self.kick_ostinato.add(18)  # Beat 2&
         elif self.style == PlayingStyle.FUNK or self.style == PlayingStyle.HIP_HOP:
             # More syncopated
             candidates = [6, 12, 18, 30, 36, 42]
@@ -101,8 +104,6 @@ class VirtualDrummer(VirtualInstrumentalist):
         intensity = state.get("intensity", 80)
         current_bar = self.brain.current_bar
         phase = state.get("phase", "")
-        grid_idx = (beat * 12) + sub_beat
-        total_bar_beat = (beat * 12) + sub_beat
 
         # 1. Update Mode & Ostinato on Bar Start
         if beat == 0 and sub_beat == 0:
@@ -119,7 +120,7 @@ class VirtualDrummer(VirtualInstrumentalist):
             elif "AI FILL" in phase:
                 self.current_groove_mode = "RESPONSE_FILL"
                 # Prepare fill skeleton at the start of the turn (or every 4 bars)
-                if current_bar % 4 == 0 or not hasattr(self, '_fill_skeleton'):
+                if current_bar % 4 == 0 or not hasattr(self, "_fill_skeleton"):
                     self._prepare_response_fill()
             else:
                 self.current_groove_mode = "GROOVE"
@@ -138,7 +139,6 @@ class VirtualDrummer(VirtualInstrumentalist):
         """Phase 1: Pre-generate a 4-bar fill skeleton from the human's fill."""
         fill_pattern = self.brain.get_pattern_data("fill")
         ticks_per_bar = 48  # 4 beats * 12 sub-beats
-        total_ticks = ticks_per_bar * 4  # 4 bars
 
         # Extract human's rhythmic density per bar
         human_hits_per_bar = [0] * 4
@@ -168,7 +168,7 @@ class VirtualDrummer(VirtualInstrumentalist):
 
     def _generate_response_fill(self, beat: int, sub: int, state: Dict[str, Any], intensity: int):
         """Phase 2: Play pre-generated fill skeleton with orchestrated voices."""
-        if not hasattr(self, '_fill_skeleton') or not self._fill_skeleton:
+        if not hasattr(self, "_fill_skeleton") or not self._fill_skeleton:
             return
 
         bar_in_phrase = self.brain.current_bar % 4
@@ -226,8 +226,8 @@ class VirtualDrummer(VirtualInstrumentalist):
         if sub_beat == 0 and beat in [1, 3]:
             if random.random() < 0.95:
                 self._play_drum_hit(DRUM_MAP["snare"], intensity, beat, sub_beat)
-        elif sub_beat == 6 and random.random() < 0.1: # Light ghost snares
-             self._play_drum_hit(DRUM_MAP["snare"], intensity // 3, beat, sub_beat)
+        elif sub_beat == 6 and random.random() < 0.1:  # Light ghost snares
+            self._play_drum_hit(DRUM_MAP["snare"], intensity // 3, beat, sub_beat)
 
         # Phrase transition fills near 8-bar boundaries in Jam mode.
         if self._is_phrase_fill_window(state, beat, sub_beat):
@@ -236,12 +236,12 @@ class VirtualDrummer(VirtualInstrumentalist):
         # --- TIMEKEEPING: HH / Ride (Steady 8ths or 16ths) ---
         recent_human_activity = self.brain.get_pattern_data("groove")
         human_ride = any(51 in [h[0] for h in hits] for hits in recent_human_activity.values())
-        use_ride = (intensity > 105 or human_ride or self.style == PlayingStyle.JAZZ)
+        use_ride = intensity > 105 or human_ride or self.style == PlayingStyle.JAZZ
         timekeeper = DRUM_MAP["ride"] if use_ride else DRUM_MAP["closed_hihat"]
 
         # Steady 8th notes (always play)
         if sub_beat == 0 or sub_beat == 6:
-            vel = intensity if sub_beat == 0 else int(intensity * 0.7) # Accent on the beat
+            vel = intensity if sub_beat == 0 else int(intensity * 0.7)  # Accent on the beat
             self._play_drum_hit(timekeeper, vel, beat, sub_beat)
 
         # Optional 16th fillers (syncopated/tight feel)
@@ -291,10 +291,10 @@ class VirtualDrummer(VirtualInstrumentalist):
     def _generate_fill_hit(self, beat: int, sub_beat: int, state: Dict[str, Any], intensity: int):
         """Snare and Tom based builds/fills."""
         # Fills get busier as they approach the end of the bar
-        fill_density = (beat + 1) / 4.0 # 0.25 to 1.0
+        fill_density = (beat + 1) / 4.0  # 0.25 to 1.0
 
         # Higher probability of playing on 8th or 16th boundaries
-        is_sub_boundary = (sub_beat % 3 == 0)
+        is_sub_boundary = sub_beat % 3 == 0
 
         if is_sub_boundary and random.random() < fill_density:
             # Choose voice: Snare or Toms
@@ -330,16 +330,18 @@ class VirtualDrummer(VirtualInstrumentalist):
         # Record and Log
         self.buffered_scrolling_hits.append(note)
         grid_idx = (beat * 12) + sub
-        if grid_idx not in self.pattern: self.pattern[grid_idx] = []
+        if grid_idx not in self.pattern:
+            self.pattern[grid_idx] = []
         self.pattern[grid_idx].append((note, velocity))
 
-    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: List[Tuple[int, int]]):
+    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: Optional[List[Any]] = None) -> None:
         """Advances the scrolling visual history by one 16th note step."""
         step_idx = sub_beat // 3
         current_global_step = (bar_beat * 4) + step_idx
 
         if not hasattr(self, "rolling_visual_history"):
             from collections import deque
+
             self.rolling_visual_history = deque(maxlen=64)
             self.last_step_idx = -1
 
@@ -348,52 +350,69 @@ class VirtualDrummer(VirtualInstrumentalist):
             if hits and self.rolling_visual_history and self.rolling_visual_history[0] == ". ":
                 notes = [h[0] for h in hits]
                 ds = self._get_drum_symbol(notes)
-                if ds: self.rolling_visual_history[0] = ds
+                if ds:
+                    self.rolling_visual_history[0] = ds
             return
 
         self.last_step_idx = current_global_step
 
         symbol = ". "
-        if not hits and self.buffered_scrolling_hits:
-             hits = list(self.buffered_scrolling_hits)
-             self.buffered_scrolling_hits.clear()
+        step_hits: List[Any] = hits if hits is not None else []
+
+        if not step_hits and self.buffered_scrolling_hits:
+            step_hits = list(self.buffered_scrolling_hits)
+            self.buffered_scrolling_hits.clear()
 
         # Update symbol based on hits (either passed or buffered)
-        if hits:
+        if step_hits:
             # Tuples (note, vel) -> just notes
-            notes = [h[0] if isinstance(h, tuple) else h for h in hits]
+            notes = [h[0] if isinstance(h, tuple) else h for h in step_hits]
             ds = self._get_drum_symbol(notes)
-            if ds: symbol = ds
+            if ds:
+                symbol = ds
 
         if bar_beat == 0 and step_idx == 0:
             self.rolling_visual_history.appendleft("| ")
 
         self.rolling_visual_history.appendleft(symbol)
 
-    def _get_drum_symbol(self, notes: List[int]) -> str:
+    def _get_drum_symbol(self, notes: List[int]) -> Optional[str]:
         """Shared symbol mapper for drum agents."""
         has_cr1 = 49 in notes
         has_cr2 = 57 in notes
-        if has_cr1 and has_cr2: return "X "
-        if has_cr1: return "C "
-        if has_cr2: return "c "
-        if 51 in notes: return "R "
-        if 38 in notes or 40 in notes: return "SN"
-        if 42 in notes or 44 in notes or 46 in notes: return "HH"
-        if 48 in notes: return "T1"
-        if 45 in notes: return "T2"
-        if 41 in notes: return "T3"
-        if 36 in notes: return "K "
+        if has_cr1 and has_cr2:
+            return "X "
+        if has_cr1:
+            return "C "
+        if has_cr2:
+            return "c "
+        if 51 in notes:
+            return "R "
+        if 38 in notes or 40 in notes:
+            return "SN"
+        if 42 in notes or 44 in notes or 46 in notes:
+            return "HH"
+        if 48 in notes:
+            return "T1"
+        if 45 in notes:
+            return "T2"
+        if 41 in notes:
+            return "T3"
+        if 36 in notes:
+            return "K "
         return None
 
     def get_scrolling_visual(self) -> str:
         from jam_shed.tui.visual import render_scrolling_visual
+
         if not hasattr(self, "rolling_visual_history"):
             return "[bold green]▶[/]"
         return render_scrolling_visual(self.rolling_visual_history)
 
+
 class DrumShedAgent(VirtualDrummer):
     """Specialized Drummer for Shed Mode (TradingSolos)."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Shed mode agents can have different personality if needed

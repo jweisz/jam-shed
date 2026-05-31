@@ -1,24 +1,25 @@
 """
 Shared visual rendering utilities for groove pattern visualization.
 """
+
 from abc import ABC, abstractmethod
 from collections import deque
 from typing import Dict, List, Tuple
-from jam_shed.core.constants import KICK, SNARE, CLOSED_HIHAT, OPEN_HIHAT, RIDE, CRASH
 
+from jam_shed.core.constants import CLOSED_HIHAT, KICK, OPEN_HIHAT, RIDE, SNARE
 
 # ── Instrument-to-color mapping ──────────────────────────────────────
 HIT_COLORS = {
     "K": "yellow",
     "S": "red",
     "H": "cyan",
-    "X": "white",       # kick+snare
+    "X": "white",  # kick+snare
     "R": "green",
     "C": "magenta",
     "c": "magenta",
-    "1": "#FF8800",     # high tom (orange)
-    "2": "#FF8800",     # mid tom
-    "3": "#FF8800",     # floor tom
+    "1": "#FF8800",  # high tom (orange)
+    "2": "#FF8800",  # mid tom
+    "3": "#FF8800",  # floor tom
     "CH": "bright_white",
     "N ": "bright_white",
 }
@@ -58,7 +59,7 @@ def render_groove_pattern_rich(
     beats_per_bar: int = 4,
     subdivision: int = 4,
     step_size: int = 3,
-    color: str = "white"
+    color: str = "white",
 ) -> str:
     """
     Generate rich text visualization of a groove pattern with color-coded hits.
@@ -147,7 +148,7 @@ def render_bouncing_ball(
         for s in range(subdivision):
             current_idx = (b * subdivision) + s
             if current_idx == global_active_idx:
-                beat_parts.append(f"[bold green]▼  [/]")
+                beat_parts.append("[bold green]▼  [/]")
             else:
                 beat_parts.append("   ")
         # "| " prefix and " |" suffix to align with groove pattern
@@ -156,8 +157,7 @@ def render_bouncing_ball(
     return " ".join(parts)
 
 
-def render_gauge(value: float, width: int = 20, max_value: float = 100,
-                 color: str = "cyan", label: str = "") -> str:
+def render_gauge(value: float, width: int = 20, max_value: float = 100, color: str = "cyan", label: str = "") -> str:
     """
     Render a horizontal gauge/fill bar.
 
@@ -182,8 +182,7 @@ def render_gauge(value: float, width: int = 20, max_value: float = 100,
     return f"{prefix}[{color}]{bar}[/] {val_str}"
 
 
-def render_beat_dots(current: int, total: int, label: str = "",
-                     active_color: str = "green") -> str:
+def render_beat_dots(current: int, total: int, label: str = "", active_color: str = "green") -> str:
     """
     Render a dot-based indicator (e.g. for BAR or BEAT position).
 
@@ -311,6 +310,7 @@ def create_metronome_visual(current_beat: int, beats_per_bar: int = 4) -> str:
 
 
 # ── Session Visualizers (ABC pattern) ────────────────────────────────
+
 
 class SessionVisualizer(ABC):
     """Base class for session-mode visualizers.

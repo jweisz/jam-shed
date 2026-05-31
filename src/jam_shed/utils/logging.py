@@ -1,6 +1,7 @@
 """
 Logging configuration for jam-shed.
 """
+
 import logging
 import sys
 from typing import Optional
@@ -9,15 +10,16 @@ from typing import Optional
 # Color codes for terminal output
 class LogColors:
     """ANSI color codes for terminal logging."""
-    RESET = '\033[0m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    MAGENTA = '\033[95m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
+
+    RESET = "\033[0m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    CYAN = "\033[96m"
+    WHITE = "\033[97m"
+    BOLD = "\033[1m"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -39,11 +41,7 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging(
-    level: int = logging.INFO,
-    log_file: Optional[str] = None,
-    use_colors: bool = True
-) -> logging.Logger:
+def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None, use_colors: bool = True) -> logging.Logger:
     """
     Setup logging configuration for jam-shed.
 
@@ -55,7 +53,7 @@ def setup_logging(
     Returns:
         Configured logger instance
     """
-    logger = logging.getLogger('jam-shed')
+    logger = logging.getLogger("jam-shed")
     logger.setLevel(level)
 
     # Remove existing handlers
@@ -66,14 +64,10 @@ def setup_logging(
     console_handler.setLevel(level)
 
     if use_colors:
-        console_formatter = ColoredFormatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
-        )
+        console_formatter = ColoredFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
     else:
         console_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
         )
 
     console_handler.setFormatter(console_formatter)
@@ -83,9 +77,7 @@ def setup_logging(
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(level)
-        file_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+        file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
@@ -103,8 +95,8 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
         Logger instance
     """
     if name:
-        return logging.getLogger(f'jam-shed.{name}')
-    return logging.getLogger('jam-shed')
+        return logging.getLogger(f"jam-shed.{name}")
+    return logging.getLogger("jam-shed")
 
 
 # Default logger instance

@@ -1,7 +1,7 @@
 """
 Tests for jam_shed.brain module.
 """
-import pytest
+
 from jam_shed.core.brain import RhythmicBrain
 
 
@@ -45,6 +45,7 @@ def test_calculate_bpm():
 
     # Manually add timings at 120 BPM (0.5s per beat)
     import time
+
     base_time = time.time()
     brain.human_timings = [
         base_time,

@@ -1,27 +1,44 @@
-from typing import List, Optional
-from textual.app import App, ComposeResult, on
-from textual.binding import Binding
+import argparse
+import random
 import threading
 import time
-import random
-from textual.widgets import Header, Footer, Select, Static, Label, Button, RadioSet, RadioButton, RichLog, Checkbox, Input
-from textual.containers import Container, Grid, Horizontal, ItemGrid, Vertical, VerticalScroll
-from jam_shed.midi.engine import MIDIEngine
-from jam_shed.core.brain import RhythmicBrain
+from typing import List, Optional
+
+from textual import on
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Grid, Horizontal, ItemGrid, Vertical, VerticalScroll
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Footer,
+    Header,
+    Input,
+    Label,
+    RadioButton,
+    RadioSet,
+    RichLog,
+    Select,
+    Static,
+)
+
 from jam_shed.agents import PlayingStyle
+from jam_shed.agents.base import VirtualInstrumentalist
 from jam_shed.agents.bassist import VirtualBassist
-from jam_shed.agents.lead_guitarist import VirtualLeadGuitarist
-from jam_shed.agents.rhythm_guitarist import VirtualRhythmGuitarist
 from jam_shed.agents.drummer import VirtualDrummer
 from jam_shed.agents.keyboardist import VirtualKeyboardist
+from jam_shed.agents.lead_guitarist import VirtualLeadGuitarist
+from jam_shed.agents.rhythm_guitarist import VirtualRhythmGuitarist
+from jam_shed.core.brain import RhythmicBrain
 from jam_shed.core.session import JamSession
 from jam_shed.core.theory import MusicTheory
-from jam_shed.utils.debug import debug_log
+from jam_shed.midi.engine import MIDIEngine
 from jam_shed.tui.visual import (
-    render_groove_pattern_rich,
-    render_gauge,
     render_beat_dots,
+    render_gauge,
 )
+from jam_shed.utils.debug import debug_log
+
 
 class ClockThread(threading.Thread):
     def __init__(self, app):
@@ -51,13 +68,22 @@ class ClockThread(threading.Thread):
     def stop(self):
         self._stop_event.set()
 
+
 class JamShedApp(App):
     # MIDI Drum Mapping
     DRUM_NAMES = {
-        36: "KICK", 38: "SNARE", 40: "S-RIM",
-        42: "HH-CL", 44: "HH-PD", 46: "HH-OP",
-        41: "F-TOM", 45: "M-TOM", 48: "H-TOM",
-        49: "CRASH1", 57: "CRASH2", 51: "RIDE"
+        36: "KICK",
+        38: "SNARE",
+        40: "S-RIM",
+        42: "HH-CL",
+        44: "HH-PD",
+        46: "HH-OP",
+        41: "F-TOM",
+        45: "M-TOM",
+        48: "H-TOM",
+        49: "CRASH1",
+        57: "CRASH2",
+        51: "RIDE",
     }
     DRUM_AGENT_NAMES = {"DRUMMER", "MANUAL", "ME", "CLICK", "SIGNAL"}
 
@@ -505,7 +531,7 @@ class JamShedApp(App):
         Binding("p", "palette", "palette"),
     ]
 
-    def __init__(self, soundfont_path: str = None, **kwargs):
+    def __init__(self, soundfont_path: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.soundfont_path = soundfont_path
         try:
@@ -516,9 +542,9 @@ class JamShedApp(App):
             self.midi = MIDIEngine()
 
         self.brain = RhythmicBrain()
-        self.agents = []
+        self.agents: List[VirtualInstrumentalist] = []
         self.session_active = False
-        self.jam_session = None
+        self.jam_session: Optional[JamSession] = None
         self.beats_per_bar = 4
         self._trading_enabled = False
         self._hit_buffer = []
@@ -528,6 +554,11 @@ class JamShedApp(App):
         self.click_track_active = False  # Default to off
         self.visual_click_active = False
         self._session_mode = "groove"  # Track selected mode
+
+    @staticmethod
+    def _as_str(value: object) -> Optional[str]:
+        """Return value as non-empty str when possible, else None."""
+        return value if isinstance(value, str) and value else None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -576,8 +607,8 @@ class JamShedApp(App):
                 yield Label("Tempo", classes="status-active")
                 with Horizontal(id="tempo_controls"):
                     with RadioSet(id="bpm_mode_select"):
-                         yield RadioButton("Fixed", id="bpm_fixed", value=True)
-                         yield RadioButton("Adaptive", id="bpm_adaptive")
+                        yield RadioButton("Fixed", id="bpm_fixed", value=True)
+                        yield RadioButton("Adaptive", id="bpm_adaptive")
                     yield Input("120", id="bpm_input", type="integer", placeholder="BPM")
 
                 yield Checkbox("Audible Click", id="click_track", value=False)
@@ -615,19 +646,24 @@ class JamShedApp(App):
                 yield Label("JAM CONTROL", classes="status-active")
                 with Grid(classes="settings-grid"):
                     with Horizontal(classes="settings-col"):
-                        yield Select([("4/4", "4/4"), ("3/4", "3/4"), ("6/8", "6/8"), ("7/8", "7/8"), ("5/4", "5/4")],
-                                     id="select_time_sig", value="4/4")
+                        yield Select(
+                            [("4/4", "4/4"), ("3/4", "3/4"), ("6/8", "6/8"), ("7/8", "7/8"), ("5/4", "5/4")],
+                            id="select_time_sig",
+                            value="4/4",
+                        )
                     with Horizontal(classes="settings-col"):
                         yield Select([(k, k) for k in MusicTheory.KEYS.keys()], id="select_key", value="C")
                     with Horizontal(classes="settings-col"):
-                        yield Select([(s, s) for s in MusicTheory.SCALE_OPTIONS], id="select_scale", value="Major (Ionian)")
+                        yield Select(
+                            [(s, s) for s in MusicTheory.SCALE_OPTIONS], id="select_scale", value="Major (Ionian)"
+                        )
 
                 with Vertical(classes="settings-row hidden"):
                     yield Label("Style")
                     yield Select(
                         [(style.value.replace("_", " ").title(), style.value) for style in PlayingStyle],
                         id="select_style",
-                        value=PlayingStyle.ROCK.value
+                        value=PlayingStyle.ROCK.value,
                     )
 
                 yield Label("Instrumentalists", classes="status-active")
@@ -661,7 +697,7 @@ class JamShedApp(App):
             with VerticalScroll(id="center_content"):
                 yield Label("INSTRUMENTALISTS", classes="status-active")
                 with Vertical(id="agent_visuals"):
-                     pass  # Dynamic agent rows will be added here
+                    pass  # Dynamic agent rows will be added here
 
         # ── Right Sidebar (Activity Log) ──────────────
         with Vertical(id="log_sidebar"):
@@ -813,11 +849,11 @@ class JamShedApp(App):
     @on(Input.Changed)
     def on_bpm_change(self, event: Input.Changed) -> None:
         if event.input.id == "bpm_input":
-             try:
-                 val = int(event.value)
-                 self.brain.set_bpm(float(val))
-             except (ValueError, TypeError):
-                 pass
+            try:
+                val = int(event.value)
+                self.brain.set_bpm(float(val))
+            except (ValueError, TypeError):
+                pass
 
     @on(Checkbox.Changed, "#click_track")
     def on_click_track_changed(self, event: Checkbox.Changed):
@@ -828,6 +864,9 @@ class JamShedApp(App):
         self.visual_click_active = event.value
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+        if event.pressed is None:
+            return
+
         if event.radio_set.id == "bpm_mode_select":
             mode = "fixed" if event.pressed.id == "bpm_fixed" else "adaptive"
             self.brain.bpm_mode = mode
@@ -842,7 +881,9 @@ class JamShedApp(App):
                 pass
 
         elif event.radio_set.id == "mode_select":
-            mode = "jam" if event.pressed.id == "mode_jam" else ("groove" if event.pressed.id == "mode_groove" else "shed")
+            mode = (
+                "jam" if event.pressed.id == "mode_jam" else ("groove" if event.pressed.id == "mode_groove" else "shed")
+            )
             self._set_session_mode(mode)
 
     def _update_mode_visibility(self):
@@ -875,33 +916,37 @@ class JamShedApp(App):
                     pass
         except Exception:
             pass
+
     @on(Select.Changed)
     def handle_selection(self, event: Select.Changed) -> None:
-        if event.value is Select.BLANK or not event.value:
+        selected = self._as_str(event.value)
+        if selected is None:
             return
 
         if event.select.id == "input_select":
-            self.update_log(f"Attempting to open Input: {event.value}")
-            if self.midi.open_input(event.value, callback=self.midi_callback):
-                self.update_log(f"SUCCESS: Listening on {event.value}")
+            self.update_log(f"Attempting to open Input: {selected}")
+            if self.midi.open_input(selected, callback=self.midi_callback):
+                self.update_log(f"SUCCESS: Listening on {selected}")
             else:
-                self.update_log(f"FAILED: Could not open Input {event.value}")
+                self.update_log(f"FAILED: Could not open Input {selected}")
 
         elif event.select.id == "output_select":
-            self.update_log(f"Attempting to open Output: {event.value}")
-            if self.midi.open_output(event.value):
-                self.update_log(f"SUCCESS: Sending to {event.value}")
+            self.update_log(f"Attempting to open Output: {selected}")
+            if self.midi.open_output(selected):
+                self.update_log(f"SUCCESS: Sending to {selected}")
             else:
-                self.update_log(f"FAILED: Could not open Output {event.value}")
+                self.update_log(f"FAILED: Could not open Output {selected}")
 
         elif event.select.id in ["select_key", "select_scale"]:
-            key = self.query_one("#select_key", Select).value
-            scale = self.query_one("#select_scale", Select).value
+            key = self._as_str(self.query_one("#select_key", Select).value)
+            scale = self._as_str(self.query_one("#select_scale", Select).value)
+            if key is None or scale is None:
+                return
             for agent in self.agents:
                 agent.update_theory(key, scale)
 
         elif event.select.id == "select_time_sig":
-            sig = event.value
+            sig = selected
             try:
                 beats = int(sig.split("/")[0])
                 if self.jam_session:
@@ -941,20 +986,15 @@ class JamShedApp(App):
             if not ((msg[0] & 0xF0) == 0x90):
                 self.safe_call(self.update_log, f"RAW MIDI: {msg}")
         if len(msg) >= 3 and (msg[0] & 0xF0) == 0x90:
-            channel = (msg[0] & 0x0F) + 1  # 1-indexed for logic
             note = msg[1]
             velocity = msg[2]
-
-            # CRITICAL: Prevent Feedback Loop
-            if channel == 10:
-                return
 
             if velocity > 0:
                 # First hit detection
                 if self.jam_session and self.jam_session.waiting_for_first_hit:
                     self.jam_session.start_first_hit()
-                    self.brain.reset_beat_clock()   # anchors wall-clock; sets is_jamming=True
-                    self.on_beat_detected()           # fire beat 0 synchronously
+                    self.brain.reset_beat_clock()  # anchors wall-clock; sets is_jamming=True
+                    self.on_beat_detected()  # fire beat 0 synchronously
                     self.safe_call(self.update_log, "SIGNAL RECEIVED: 1-Bar Lead-in...")
                     self.safe_call(self.blink_led, "led_in")
                     return
@@ -988,9 +1028,12 @@ class JamShedApp(App):
 
                 # Visual highlight for human kit
                 pad_note = note
-                if note == 40: pad_note = 38
-                if note in [44, 46]: pad_note = 42
-                if note == 43: pad_note = 41
+                if note == 40:
+                    pad_note = 38
+                if note in [44, 46]:
+                    pad_note = 42
+                if note == 43:
+                    pad_note = 41
 
                 if pad_note in self.DRUM_NAMES:
                     self.safe_call(self.blink_kit_part, pad_note, "kit_human")
@@ -1002,7 +1045,8 @@ class JamShedApp(App):
         self._hit_timer = self.set_timer(0.02, self._flush_hit_buffer)
 
     def _flush_hit_buffer(self):
-        if not self._hit_buffer: return
+        if not self._hit_buffer:
+            return
 
         names = []
         raw_data = []
@@ -1067,6 +1111,32 @@ class JamShedApp(App):
             return cls.DRUM_NAMES.get(note, f"{note}")
         return cls._format_pitched_note_name(note)
 
+    @staticmethod
+    def _bar_display_index(bars_elapsed: int, bars_per_cycle: int) -> int:
+        """Convert bars_elapsed to zero-based index within the cycle.
+
+        Args:
+            bars_elapsed: 1-indexed bar count (starting from 1)
+            bars_per_cycle: Length of the cycle (e.g., 4, 8, 12)
+
+        Returns:
+            Zero-based index within the cycle (0 to bars_per_cycle - 1)
+        """
+        return (bars_elapsed - 1) % bars_per_cycle
+
+    @staticmethod
+    def _should_emit_countin_click(is_leadin: bool, click_track_enabled: bool) -> bool:
+        """Determine if count-in click should be emitted.
+
+        Args:
+            is_leadin: Whether session is in lead-in phase
+            click_track_enabled: Whether click track is enabled by user
+
+        Returns:
+            True if click should be emitted, False otherwise
+        """
+        return is_leadin or click_track_enabled
+
     def log_agent_activity(self, agent_name: str, note: int, channel: Optional[int] = None):
         self.safe_call(self.blink_led, "led_out")
         name = self._note_label_for_log(agent_name, note, channel)
@@ -1078,9 +1148,9 @@ class JamShedApp(App):
         """Update the stats dashboard with gauges and dot indicators."""
         try:
             state = self.brain.get_state()
-            bpm = state['bpm']
-            intensity = int(state['intensity'])
-            complexity = state['complexity']
+            bpm = state["bpm"]
+            intensity = int(state["intensity"])
+            complexity = state["complexity"]
 
             # BPM (large)
             self.query_one("#label_bpm_big", Label).update(f"♩ {bpm:.0f}")
@@ -1096,12 +1166,12 @@ class JamShedApp(App):
             # Beat dots
             if self.jam_session and self.session_active:
                 status = self.jam_session.get_status()
-                bars_elapsed = status.get('bars_elapsed', 0)
-                beat_in_bar = status.get('beats_elapsed', 0)
-                bars_per_cycle = getattr(self.jam_session, 'bars_per_cycle', 8)
-                is_groove = getattr(self.jam_session, 'is_groove', False)
-                is_leadin = status.get('is_leadin', False)
-                is_waiting = status.get('is_waiting', False)
+                bars_elapsed = status.get("bars_elapsed", 0)
+                beat_in_bar = status.get("beats_elapsed", 0)
+                bars_per_cycle = getattr(self.jam_session, "bars_per_cycle", 8)
+                is_groove = getattr(self.jam_session, "is_groove", False)
+                is_leadin = status.get("is_leadin", False)
+                is_waiting = status.get("is_waiting", False)
 
                 # bars_elapsed is 1-indexed (incremented on each bar transition),
                 # so subtract 1 to get a 0-indexed dot position.
@@ -1156,15 +1226,15 @@ class JamShedApp(App):
 
             if status.get("is_leadin"):
                 banner.add_class("banner-leadin")
-            elif status['current_soloist'].upper() == "HUMAN":
+            elif status["current_soloist"].upper() == "HUMAN":
                 banner.add_class("banner-human")
             else:
                 banner.add_class("banner-ai")
 
             # Turn label
             turn_label = self.query_one("#label_turn", Label)
-            soloist = status['current_soloist'].upper()
-            bars_left = status.get('bars_left_in_turn', 0)
+            soloist = status["current_soloist"].upper()
+            bars_left = status.get("bars_left_in_turn", 0)
             turn_text = f"{soloist} (Bars Left: {bars_left})" if bars_left > 0 else soloist
             turn_label.update(turn_text)
 
@@ -1174,7 +1244,7 @@ class JamShedApp(App):
                 turn_label.remove_class("turn-human")
 
             # Phase label
-            phase_text = status['phase']
+            phase_text = status["phase"]
             self.query_one("#label_phase", Label).update(phase_text)
 
             # Instructions Update
@@ -1199,15 +1269,18 @@ class JamShedApp(App):
                 elif "AI GROOVE" in phase_text or "AI FILL" in phase_text:
                     instructions_panel.remove_class("hidden")
                     instructions_panel.classes = "instructions-ai"
-                    instructions_label.update("AI'S TURN: Keep the groove steady." if "AI FILL" in phase_text else "AI'S TURN: Listening & responding...")
+                    instructions_label.update(
+                        "AI'S TURN: Keep the groove steady."
+                        if "AI FILL" in phase_text
+                        else "AI'S TURN: Listening & responding..."
+                    )
                 else:
                     instructions_panel.add_class("hidden")
-            except Exception as e:
+            except Exception:
                 pass
 
         except Exception:
             pass
-
 
     def _update_scrolling_histories(self) -> None:
         """High-frequency update for the scrolling history. Called every tick (12x per beat)."""
@@ -1219,7 +1292,7 @@ class JamShedApp(App):
             return
 
         # Scrolling History Logic
-        current_bar_beat = status['beats_elapsed']
+        current_bar_beat = status["beats_elapsed"]
         beat_duration = 60.0 / self.brain.bpm if self.brain.bpm > 0 else 0.5
         current_sub_beat = int((self.brain.beat_accumulator / beat_duration) * 12)
         current_sub_beat = max(0, min(11, current_sub_beat))
@@ -1275,11 +1348,13 @@ class JamShedApp(App):
             container = self.query_one("#agent_visuals", Vertical)
             for agent in self.agents:
                 try:
-                    visual_text = ""
+                    visual_text: str = ""
                     if hasattr(agent, "get_scrolling_visual"):
-                        visual_text = agent.get_scrolling_visual()
-                    elif hasattr(agent, "get_history_visual"):
-                        visual_text = agent.get_history_visual()
+                        visual_text = str(agent.get_scrolling_visual())
+                    else:
+                        get_history_visual = getattr(agent, "get_history_visual", None)
+                        if callable(get_history_visual):
+                            visual_text = str(get_history_visual())
 
                     if not visual_text:
                         visual_text = "· · · · · · · · · · · · · · · ·"
@@ -1293,7 +1368,8 @@ class JamShedApp(App):
                         # Before creating a new one, aggressively attempt to remove any broken/stale placeholder
                         try:
                             stale = container.query_one(f"#agent_row_{agent_id}")
-                            if stale: stale.remove()
+                            if stale:
+                                stale.remove()
                         except Exception:
                             pass
 
@@ -1338,31 +1414,33 @@ class JamShedApp(App):
 
         # Drum key map: z,x,c,v,b,n,m,,,. → Kick, Snare, HH, Toms, Crash 1, Crash 2, Ride
         key_map = {
-            "z": 36, # Kick
-            "x": 38, # Snare
-            "c": 42, # HH Closed
-            "v": 48, # High Tom (T1)
-            "b": 45, # Mid Tom (T2)
-            "n": 41, # Low Tom (T3)
-            "m": 49, # Crash 1
-            ",": 57, # Crash 2
-            ".": 51  # Ride
+            "z": 36,  # Kick
+            "x": 38,  # Snare
+            "c": 42,  # HH Closed
+            "v": 48,  # High Tom (T1)
+            "b": 45,  # Mid Tom (T2)
+            "n": 41,  # Low Tom (T3)
+            "m": 49,  # Crash 1
+            ",": 57,  # Crash 2
+            ".": 51,  # Ride
         }
         if char.lower() in key_map:
             note = key_map[char.lower()]
             self.flash_pad_visual(note)
             self._play_drum_hit([note], agent_name="MANUAL", channel=9)
 
-
-
     def flash_pad_visual(self, note: int):
         """Flash the YOU kit pad when a note is triggered manually."""
         try:
             pad = self.query_one(f"#kit_human_{note}")
             pad.add_class("kit-active")
+
             def clear(p=pad):
-                try: p.remove_class("kit-active")
-                except Exception: pass
+                try:
+                    p.remove_class("kit-active")
+                except Exception:
+                    pass
+
             self.set_timer(0.1, clear)
         except Exception:
             pass
@@ -1371,6 +1449,8 @@ class JamShedApp(App):
     def handle_agent_toggle(self, event: Checkbox.Changed) -> None:
         """Handles adding/removing agents via checkboxes."""
         cid = event.checkbox.id
+        if cid is None:
+            return
         if event.value:
             self._add_fixed_agent(cid)
         else:
@@ -1384,7 +1464,8 @@ class JamShedApp(App):
             "agent_rhythm_guitar": (VirtualRhythmGuitarist, 2, "Rhythm Guitar"),
             "agent_bass": (VirtualBassist, 3, "Bass"),
         }
-        if checkbox_id not in mapping: return
+        if checkbox_id not in mapping:
+            return
 
         agent_cls, chan, name = mapping[checkbox_id]
 
@@ -1393,19 +1474,20 @@ class JamShedApp(App):
 
         try:
             style_select = self.query_one("#select_style", Select)
-            style_value = style_select.value
-            style = PlayingStyle(style_value)
+            style_value = self._as_str(style_select.value)
+            style = PlayingStyle(style_value) if style_value is not None else PlayingStyle.ROCK
         except (Exception, ValueError):
             style = PlayingStyle.ROCK
 
         new_agent = agent_cls(name, self.midi, self.brain, channel=chan, style=style)
         new_agent.on_play_callback = self.log_agent_activity
 
-        key = self.query_one("#select_key", Select).value
-        scale = self.query_one("#select_scale", Select).value
-        new_agent.update_theory(key, scale)
-        sig = self.query_one("#select_time_sig", Select).value
-        if hasattr(new_agent, "beats_per_bar"):
+        key = self._as_str(self.query_one("#select_key", Select).value)
+        scale = self._as_str(self.query_one("#select_scale", Select).value)
+        if key is not None and scale is not None:
+            new_agent.update_theory(key, scale)
+        sig = self._as_str(self.query_one("#select_time_sig", Select).value)
+        if hasattr(new_agent, "beats_per_bar") and sig is not None:
             new_agent.beats_per_bar = int(sig.split("/")[0])
 
         self.agents.append(new_agent)
@@ -1436,7 +1518,8 @@ class JamShedApp(App):
             "agent_bass": "Bass",
         }
         name = agent_to_name.get(checkbox_id)
-        if not name: return
+        if not name:
+            return
 
         for i, agent in enumerate(self.agents):
             if agent.name == name:
@@ -1462,7 +1545,8 @@ class JamShedApp(App):
 
     def on_beat_detected(self):
         """Called by Brain when a quarter-note beat occurs. Master Clock."""
-        if not self.session_active or not self.jam_session: return
+        if not self.session_active or not self.jam_session:
+            return
 
         # 1. Progress Session Logic
         try:
@@ -1488,8 +1572,11 @@ class JamShedApp(App):
                     # Send directly — no safe_call overhead before the MIDI send
                     if self.midi.is_out_open():
                         self.midi.send_message([0x99, note, 100])  # Ch10 note-on
-                        self.safe_call(self.set_timer, 0.05,
-                            lambda n=note: self.midi.send_message([0x89, n, 0]) if self.midi.is_out_open() else None)
+                        self.safe_call(
+                            self.set_timer,
+                            0.05,
+                            lambda n=note: self.midi.send_message([0x89, n, 0]) if self.midi.is_out_open() else None,
+                        )
                     self.safe_call(self.update_log, f"CLICK: {note}")
         except Exception as e:
             debug_log(f"APP_CLOCK: Click Error: {e}")
@@ -1513,7 +1600,8 @@ class JamShedApp(App):
 
     def on_tick_detected(self, sub_beat):
         """Called by Brain 12 times per beat. Drives agent performance."""
-        if not self.session_active or not self.jam_session: return
+        if not self.session_active or not self.jam_session:
+            return
 
         # High-frequency visual refresh
         self.safe_call(self._update_scrolling_histories)
@@ -1537,9 +1625,9 @@ class JamShedApp(App):
     def _play_drum_hit(self, note_list: List[int], agent_name: str, channel: int):
         if agent_name == "MANUAL":
             if self.jam_session and self.jam_session.waiting_for_first_hit:
-                self.jam_session.start_first_hit()    # synchronous — must run before clock starts
-                self.brain.reset_beat_clock()          # sets _beat_zero_time AND is_jamming=True
-                self.on_beat_detected()                # fire beat 0 synchronously
+                self.jam_session.start_first_hit()  # synchronous — must run before clock starts
+                self.brain.reset_beat_clock()  # sets _beat_zero_time AND is_jamming=True
+                self.on_beat_detected()  # fire beat 0 synchronously
                 self.safe_call(self.update_log, "JAM STARTED: Manual hit!")
                 self._play_drum_hit([76], agent_name="SIGNAL", channel=10)
 
@@ -1587,8 +1675,8 @@ class JamShedApp(App):
 
     def start_session(self):
         if not self.midi.is_out_open():
-            ui_val = self.query_one("#output_select", Select).value
-            if ui_val and ui_val is not Select.BLANK:
+            ui_val = self._as_str(self.query_one("#output_select", Select).value)
+            if ui_val is not None:
                 if self.midi.open_output(ui_val):
                     self.notify(f"Reconnected MIDI: {ui_val}")
                 else:
@@ -1606,8 +1694,9 @@ class JamShedApp(App):
         try:
             self.query_one("#label_groove", Label).update("[bold green]▶[/]")
             container = self.query_one("#agent_visuals", Vertical)
-            for label in container.query(".agent-visual"):
-                label.update("[bold green]▶[/]")
+            for widget in container.query(".agent-visual"):
+                if isinstance(widget, Label):
+                    widget.update("[bold green]▶[/]")
 
             # Specifically clear the drummer placeholder visual if it exists
             try:
@@ -1624,14 +1713,16 @@ class JamShedApp(App):
         self.query_one("#mode_select").disabled = True
 
         mode_radio = self.query_one("#mode_select", RadioSet).pressed_button
-        is_shed = mode_radio.id == "mode_shed"
-        is_groove = mode_radio.id == "mode_groove"
+        mode_id = mode_radio.id if mode_radio is not None else "mode_groove"
+        is_shed = mode_id == "mode_shed"
+        is_groove = mode_id == "mode_groove"
 
         if is_shed or is_groove:
             mode_name = "Groove" if is_groove else "Drum Shed"
             self.update_log(f"INITIALIZING: {mode_name} Mode...")
             from jam_shed.agents.drummer import DrumShedAgent
-            drum_partner = DrumShedAgent("DRUMMER", self.midi, self.brain, channel=9)
+
+            drum_partner: VirtualInstrumentalist = DrumShedAgent("DRUMMER", self.midi, self.brain, channel=9)
             drum_partner.on_play_callback = self.log_agent_activity
             self.agents = [drum_partner]
             self._virtual_active = True
@@ -1652,7 +1743,7 @@ class JamShedApp(App):
         self.update_log(f"SESSION READY: {len(self.agents)} Agent(s) Registered.")
 
         # Set time signature from UI
-        sig = self.query_one("#select_time_sig", Select).value
+        sig = self._as_str(self.query_one("#select_time_sig", Select).value) or "4/4"
         self.jam_session.beats_per_bar = int(sig.split("/")[0])
         self.update_metronome_layout(self.jam_session.beats_per_bar)
 
@@ -1670,8 +1761,8 @@ class JamShedApp(App):
         self.jam_session.bars_elapsed = 0
 
         # Initialize Session Theory
-        key = self.query_one("#select_key", Select).value
-        scale = self.query_one("#select_scale", Select).value
+        key = self._as_str(self.query_one("#select_key", Select).value) or "C"
+        scale = self._as_str(self.query_one("#select_scale", Select).value) or "Major (Ionian)"
         self.jam_session.update_theory(key, scale, "12-Bar Blues")
 
         if is_groove:
@@ -1731,16 +1822,15 @@ class JamShedApp(App):
         self.query_one("#mode_select").disabled = False
 
         for agent in self.agents:
-            if hasattr(agent, "stop"): agent.stop()
+            if hasattr(agent, "stop"):
+                agent.stop()
         self.agents = []
 
     def rescan_midi(self):
         input_ports = self.midi.get_input_ports()
         output_ports = self.midi.get_output_ports()
 
-        self.query_one("#input_select", Select).set_options(
-            [("Select Input...", "")] + [(p, p) for p in input_ports]
-        )
+        self.query_one("#input_select", Select).set_options([("Select Input...", "")] + [(p, p) for p in input_ports])
         self.query_one("#output_select", Select).set_options(
             [("Select Output...", "")] + [(p, p) for p in output_ports]
         )
@@ -1758,7 +1848,6 @@ class JamShedApp(App):
             self.clock_thread.stop()
         self.midi.close()
 
-import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Jam Room TUI")

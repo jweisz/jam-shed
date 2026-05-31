@@ -1,8 +1,10 @@
 """
 MIDI message utilities and dataclasses.
 """
+
 from dataclasses import dataclass
 from typing import List
+
 from jam_shed.core.constants import MIDICommand
 
 
@@ -16,7 +18,7 @@ class MIDIMessage:
     data2: int = 0  # Velocity or controller value
 
     @classmethod
-    def from_bytes(cls, message: List[int]) -> 'MIDIMessage':
+    def from_bytes(cls, message: List[int]) -> "MIDIMessage":
         """
         Create MIDIMessage from raw MIDI bytes.
 
@@ -53,7 +55,7 @@ class MIDIMessage:
         return [status, self.data1, self.data2]
 
     @classmethod
-    def note_on(cls, channel: int, note: int, velocity: int) -> 'MIDIMessage':
+    def note_on(cls, channel: int, note: int, velocity: int) -> "MIDIMessage":
         """
         Create a NoteOn message.
 
@@ -65,15 +67,10 @@ class MIDIMessage:
         Returns:
             MIDIMessage instance
         """
-        return cls(
-            command=MIDICommand.NOTE_ON,
-            channel=channel,
-            data1=note,
-            data2=velocity
-        )
+        return cls(command=MIDICommand.NOTE_ON, channel=channel, data1=note, data2=velocity)
 
     @classmethod
-    def note_off(cls, channel: int, note: int, velocity: int = 64) -> 'MIDIMessage':
+    def note_off(cls, channel: int, note: int, velocity: int = 64) -> "MIDIMessage":
         """
         Create a NoteOff message.
 
@@ -85,15 +82,10 @@ class MIDIMessage:
         Returns:
             MIDIMessage instance
         """
-        return cls(
-            command=MIDICommand.NOTE_OFF,
-            channel=channel,
-            data1=note,
-            data2=velocity
-        )
+        return cls(command=MIDICommand.NOTE_OFF, channel=channel, data1=note, data2=velocity)
 
     @classmethod
-    def control_change(cls, channel: int, controller: int, value: int) -> 'MIDIMessage':
+    def control_change(cls, channel: int, controller: int, value: int) -> "MIDIMessage":
         """
         Create a ControlChange message.
 
@@ -105,15 +97,10 @@ class MIDIMessage:
         Returns:
             MIDIMessage instance
         """
-        return cls(
-            command=MIDICommand.CONTROL_CHANGE,
-            channel=channel,
-            data1=controller,
-            data2=value
-        )
+        return cls(command=MIDICommand.CONTROL_CHANGE, channel=channel, data1=controller, data2=value)
 
     @classmethod
-    def program_change(cls, channel: int, program: int) -> 'MIDIMessage':
+    def program_change(cls, channel: int, program: int) -> "MIDIMessage":
         """
         Create a ProgramChange message.
 
@@ -124,12 +111,7 @@ class MIDIMessage:
         Returns:
             MIDIMessage instance
         """
-        return cls(
-            command=MIDICommand.PROGRAM_CHANGE,
-            channel=channel,
-            data1=program,
-            data2=0
-        )
+        return cls(command=MIDICommand.PROGRAM_CHANGE, channel=channel, data1=program, data2=0)
 
     @property
     def is_note_on(self) -> bool:
@@ -139,8 +121,7 @@ class MIDIMessage:
     @property
     def is_note_off(self) -> bool:
         """Check if this is a NoteOff message or NoteOn with zero velocity."""
-        return (self.command == MIDICommand.NOTE_OFF or
-                (self.command == MIDICommand.NOTE_ON and self.data2 == 0))
+        return self.command == MIDICommand.NOTE_OFF or (self.command == MIDICommand.NOTE_ON and self.data2 == 0)
 
     @property
     def note(self) -> int:

@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+
 class MusicTheory:
     # MIDI note offsets for common scales, ordered by brightness (bright to dark)
     SCALES = {
@@ -24,10 +25,7 @@ class MusicTheory:
 
     SCALE_OPTIONS = list(SCALES.keys())
 
-    KEYS = {
-        "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5,
-        "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11
-    }
+    KEYS = {"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11}
 
     @staticmethod
     def get_notes_in_key(root_note: str, scale_name: str, octaves: Optional[List[int]] = None) -> List[int]:
@@ -55,14 +53,14 @@ class MusicTheory:
         "Minor": [0, 3, 7],
         "Dom7": [0, 4, 7, 10],
         "Maj7": [0, 4, 7, 11],
-        "Min7": [0, 3, 7, 10]
+        "Min7": [0, 3, 7, 10],
     }
 
     # Pre-defined progressions
     PROGRESSIONS = {
         "12-Bar Blues": ["I", "I", "I", "I", "IV", "IV", "I", "I", "V", "IV", "I", "V"],
         "Pop 1 (I-V-vi-IV)": ["I", "V", "vi", "IV"],
-        "Jazz 2-5-1": ["ii", "V", "I", "I"]
+        "Jazz 2-5-1": ["ii", "V", "I", "I"],
     }
 
     @staticmethod
@@ -99,9 +97,12 @@ class MusicTheory:
             chord_type = "Minor" if is_minor else "Major"
 
             # Simple override for V in blues/pop
-            if numeral.upper() == "V": chord_type = "Dom7"
-            if numeral.upper() == "I" and "Jazz" in progression_name: chord_type = "Maj7"
-            if numeral.lower() == "ii" and "Jazz" in progression_name: chord_type = "Min7"
+            if numeral.upper() == "V":
+                chord_type = "Dom7"
+            if numeral.upper() == "I" and "Jazz" in progression_name:
+                chord_type = "Maj7"
+            if numeral.lower() == "ii" and "Jazz" in progression_name:
+                chord_type = "Min7"
 
             # Map Roman Numeral to Scale Degree Index
             degree_idx = map_rom.get(numeral.lower(), 0)
@@ -113,6 +114,6 @@ class MusicTheory:
             current_root_midi = (root_base + interval) % 12
             current_root_name = MusicTheory.get_note_name(current_root_midi)
 
-            chord_sequence.append( (current_root_name, chord_type) )
+            chord_sequence.append((current_root_name, chord_type))
 
         return chord_sequence

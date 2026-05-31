@@ -1,8 +1,8 @@
+from jam_shed.agents.base import PlayingStyle
 from jam_shed.agents.bassist import VirtualBassist
 from jam_shed.agents.drummer import VirtualDrummer
 from jam_shed.agents.lead_guitarist import VirtualLeadGuitarist
 from jam_shed.agents.rhythm_guitarist import VirtualRhythmGuitarist
-from jam_shed.agents.base import PlayingStyle
 from jam_shed.core.brain import RhythmicBrain
 
 
@@ -80,16 +80,20 @@ def test_drum_jam_mode_keeps_steady_anchor_hits():
 def test_bass_tone_weights_shift_by_section():
     bassist = VirtualBassist("Bass", FakeMIDI(), RhythmicBrain())
 
-    convo = bassist._get_tone_weights({
-        "is_jam_mode": True,
-        "jam_section": "CONVERSATION",
-        "current_soloist": "Human",
-    })
-    ret = bassist._get_tone_weights({
-        "is_jam_mode": True,
-        "jam_section": "RETURN_GROOVE",
-        "current_soloist": "Human",
-    })
+    convo = bassist._get_tone_weights(
+        {
+            "is_jam_mode": True,
+            "jam_section": "CONVERSATION",
+            "current_soloist": "Human",
+        }
+    )
+    ret = bassist._get_tone_weights(
+        {
+            "is_jam_mode": True,
+            "jam_section": "RETURN_GROOVE",
+            "current_soloist": "Human",
+        }
+    )
 
     # RETURN_GROOVE should favor root stronger than CONVERSATION.
     assert ret[0] > convo[0]
@@ -138,9 +142,7 @@ def test_bass_jam_mode_keeps_kick_following_anchor():
     midi.is_out_open.return_value = True
     brain = RhythmicBrain()
     brain.current_bar = 0
-    brain.agent_history = {
-        "Drummer": [[(36, 100)]] + [[] for _ in range(brain.total_history_ticks - 1)]
-    }
+    brain.agent_history = {"Drummer": [[(36, 100)]] + [[] for _ in range(brain.total_history_ticks - 1)]}
     bassist = VirtualBassist("Bass", midi, brain)
     state = {
         "intensity": 85,

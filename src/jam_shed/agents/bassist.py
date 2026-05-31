@@ -1,9 +1,11 @@
 """
 VirtualBassist - AI bass player with style-based playing and kick-following.
 """
-from typing import Dict, Any
+
 import random
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
+from typing import Any, Dict
+
+from jam_shed.agents.base import AgentMode, PlayingStyle, VirtualInstrumentalist
 from jam_shed.agents.style_calibration import get_bass_tone_weights
 
 
@@ -50,7 +52,7 @@ class VirtualBassist(VirtualInstrumentalist):
 
     def tick(self, state: Dict[str, Any], beat: int, sub_beat: int) -> None:
         """Called 12 times per beat. Overrides base to include kick-following logic."""
-        if not self.is_running:
+        if not self.is_running or self.mode == AgentMode.SILENT:
             return
 
         if sub_beat == 0:
@@ -58,14 +60,16 @@ class VirtualBassist(VirtualInstrumentalist):
 
         # Check if we should play based on motif
         step_size = 12 // self.subdivision
-        is_motif_step = (sub_beat % step_size == 0)
+        is_motif_step = sub_beat % step_size == 0
 
         # Listening: Did the drummer just play a kick?
         kick_detect = False
         drummer_key = self._resolve_drummer_history_key()
         if self.follow_drummer and drummer_key:
             total_ticks_per_bar = self.beats_per_bar * 12
-            abs_tick = (self.brain.current_bar * total_ticks_per_bar + beat * 12 + sub_beat) % self.brain.total_history_ticks
+            abs_tick = (
+                self.brain.current_bar * total_ticks_per_bar + beat * 12 + sub_beat
+            ) % self.brain.total_history_ticks
 
             # Check current tick for kick (36)
             hits = self.brain.agent_history[drummer_key][abs_tick]
@@ -104,24 +108,23 @@ class VirtualBassist(VirtualInstrumentalist):
 
         # Get chord notes
         chord_notes = MusicTheory.get_chord_notes(
-            self.current_chord_root,
-            self.current_chord_type,
-            octaves=self.octave_range
+            self.current_chord_root, self.current_chord_type, octaves=self.octave_range
         )
 
         if not chord_notes:
             # Fallback to scale notes
             notes = MusicTheory.get_notes_in_key(self.root_note, self.scale_name, octaves=self.octave_range)
-            if not notes: return
+            if not notes:
+                return
             note = random.choice(notes)
         else:
             # Bass Logic varies by section (Conversation vs Return Groove etc).
             root_w, fifth_w, _other_w = self._get_tone_weights(state)
             r = random.random()
             if r < root_w:
-                note = chord_notes[0] # Root
+                note = chord_notes[0]  # Root
             elif r < (root_w + fifth_w) and len(chord_notes) > 2:
-                note = chord_notes[2] # Fifth (typically index 2 in simple triads/7ths)
+                note = chord_notes[2]  # Fifth (typically index 2 in simple triads/7ths)
             else:
                 note = random.choice(chord_notes)
 
@@ -142,16 +145,14 @@ class VirtualBassist(VirtualInstrumentalist):
 
         # Schedule Note Off (longer for bass)
         import threading
+
         duration = 0.25
         if state.get("is_jam_mode"):
             if state.get("jam_section") == "CONVERSATION":
                 duration = 0.20
             elif state.get("jam_section") == "RETURN_GROOVE":
                 duration = 0.30
-        timer = threading.Timer(
-            duration,
-            lambda: self._note_off_with_cleanup(note, timer)
-        )
+        timer = threading.Timer(duration, lambda: self._note_off_with_cleanup(note, timer))
         self._active_timers.append(timer)
         timer.start()
 

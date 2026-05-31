@@ -7,18 +7,19 @@ The RhythmicBrain analyzes incoming MIDI hits to:
 - Learn and store groove patterns and fills
 - Provide timing callbacks for synchronized playback
 """
+
 import re
 import time
 from collections import deque
-from typing import List, Optional, Dict, Any, Callable, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from jam_shed.core.constants import (
+    DEFAULT_BPM,
+    MAX_BPM,
+    MIN_BPM,
+    TICKS_PER_BEAT,
     BPMMode,
     RecordingMode,
-    MIN_BPM,
-    MAX_BPM,
-    DEFAULT_BPM,
-    TICKS_PER_BEAT,
 )
 
 
@@ -44,7 +45,7 @@ class RhythmicBrain:
         self.bpm: float = DEFAULT_BPM
         self.last_hit_time: float = 0
         self.complexity: float = 0.0  # 0 to 1
-        self.intensity: float = 0.0   # 0 to 127
+        self.intensity: float = 0.0  # 0 to 127
         self.beat_accumulator: float = 0.0
         self.on_beat_callback: Optional[Callable] = None
         self.on_tick_callback: Optional[Callable[[int], None]] = None  # Callback for sub-beats
@@ -54,7 +55,7 @@ class RhythmicBrain:
 
         # Wall-clock timing anchor (set at first musical hit)
         self._beat_zero_time: float = 0.0  # time.time() of beat 0
-        self._beats_fired: int = 0          # how many beat callbacks fired so far
+        self._beats_fired: int = 0  # how many beat callbacks fired so far
 
         # Timing data collection
         self.human_timings: List[float] = []
@@ -83,32 +84,44 @@ class RhythmicBrain:
         # Scrolling Visual History (16th note resolution)
         # deque of strings representing what happened at each step
         self.rolling_visual_history: deque = deque(maxlen=64)
-        self.last_step_idx: int = -1 # Track 16th note steps (0-15 for 4/4)
+        self.last_step_idx: int = -1  # Track 16th note steps (0-15 for 4/4)
 
     def capture_scrolling_hit(self, note: int):
         """Captures a hit specifically for the linear scrolling visualizer."""
         self.buffered_scrolling_hits.append(note)
 
-    def _get_drum_symbol(self, notes: List[int]) -> str:
+    def _get_drum_symbol(self, notes: List[int]) -> Optional[str]:
         """Map drum MIDI notes to symbols according to user request."""
         # Priorities: Crashes > Ride > Snare > HH > Toms > Kick
         has_cr1 = 49 in notes
         has_cr2 = 57 in notes
-        if has_cr1 and has_cr2: return "X "
-        if has_cr1: return "C "
-        if has_cr2: return "c "
+        if has_cr1 and has_cr2:
+            return "X "
+        if has_cr1:
+            return "C "
+        if has_cr2:
+            return "c "
 
-        if 51 in notes: return "R "
-        if 38 in notes or 40 in notes: return "SN"
-        if 42 in notes or 44 in notes or 46 in notes: return "HH"
-        if 48 in notes: return "T1"
-        if 45 in notes: return "T2"
-        if 41 in notes: return "T3"
-        if 36 in notes: return "K "
+        if 51 in notes:
+            return "R "
+        if 38 in notes or 40 in notes:
+            return "SN"
+        if 42 in notes or 44 in notes or 46 in notes:
+            return "HH"
+        if 48 in notes:
+            return "T1"
+        if 45 in notes:
+            return "T2"
+        if 41 in notes:
+            return "T3"
+        if 36 in notes:
+            return "K "
 
         return None
 
-    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: Optional[List[Tuple[int, int]]] = None, is_melodic: bool = False):
+    def advance_scrolling_history(
+        self, bar_beat: int, sub_beat: int, hits: Optional[List[Tuple[int, int]]] = None, is_melodic: bool = False
+    ):
         """Advances history. If hits is None, uses self.buffered_scrolling_hits then clears it."""
         step_idx = sub_beat // 3
         current_global_step = (bar_beat * 4) + step_idx
@@ -129,11 +142,14 @@ class RhythmicBrain:
                         ds = self._get_drum_symbol(active_notes)
                         if ds:
                             self.rolling_visual_history[0] = ds
-                            if not hits: self.buffered_scrolling_hits.clear()
+                            if not hits:
+                                self.buffered_scrolling_hits.clear()
                     else:
                         from jam_shed.core.theory import MusicTheory
+
                         self.rolling_visual_history[0] = MusicTheory.get_note_name(active_notes[0]).ljust(2)
-                        if not hits: self.buffered_scrolling_hits.clear()
+                        if not hits:
+                            self.buffered_scrolling_hits.clear()
             return
 
         self.last_step_idx = current_global_step
@@ -143,13 +159,16 @@ class RhythmicBrain:
         if active_notes:
             if not is_melodic:
                 ds = self._get_drum_symbol(active_notes)
-                if ds: symbol = ds
+                if ds:
+                    symbol = ds
             else:
                 from jam_shed.core.theory import MusicTheory
+
                 symbol = MusicTheory.get_note_name(active_notes[0]).ljust(2)
 
             # Clear buffer if we consumed it
-            if not hits: self.buffered_scrolling_hits.clear()
+            if not hits:
+                self.buffered_scrolling_hits.clear()
 
         # 2. Check for measure boundary
         if bar_beat == 0 and step_idx == 0:
@@ -161,6 +180,7 @@ class RhythmicBrain:
     def get_scrolling_visual(self) -> str:
         """Returns the scrolling history as a single-line string with a fixed 'now' marker."""
         from jam_shed.tui.visual import render_scrolling_visual
+
         return render_scrolling_visual(self.rolling_visual_history)
 
     def start_listening(self) -> None:
@@ -246,7 +266,7 @@ class RhythmicBrain:
 
         intervals = []
         for i in range(1, len(self.human_timings)):
-            intervals.append(self.human_timings[i] - self.human_timings[i-1])
+            intervals.append(self.human_timings[i] - self.human_timings[i - 1])
 
         if intervals:
             avg_interval = sum(intervals) / len(intervals)
@@ -264,7 +284,7 @@ class RhythmicBrain:
         subsequent beats are scheduled by update_time() relative to this timestamp.
         """
         self._beat_zero_time = time.time()
-        self._beats_fired = 1     # beat 0 fires synchronously from the caller
+        self._beats_fired = 1  # beat 0 fires synchronously from the caller
         self.beat_accumulator = 0.0
         self.last_sub_beat = -1
         self.is_jamming = True
@@ -321,7 +341,6 @@ class RhythmicBrain:
             if self.on_tick_callback:
                 self.on_tick_callback(current_sub)
 
-
     def _update_bpm(self) -> None:
         """Update BPM estimate based on interval history (adaptive mode)."""
         if len(self.interval_history) < 4:
@@ -365,7 +384,9 @@ class RhythmicBrain:
 
         # Calculate absolute tick index in the rolling 8-bar window
         total_ticks_per_bar = self.beats_per_bar * TICKS_PER_BEAT
-        abs_tick = (self.current_bar * total_ticks_per_bar + bar_beat * TICKS_PER_BEAT + sub_beat) % self.total_history_ticks
+        abs_tick = (
+            self.current_bar * total_ticks_per_bar + bar_beat * TICKS_PER_BEAT + sub_beat
+        ) % self.total_history_ticks
 
         self.agent_history[agent_name][abs_tick].append((note, velocity))
 
@@ -444,12 +465,16 @@ class RhythmicBrain:
         target = self.groove_pattern if self.current_recording == RecordingMode.GROOVE.value else self.fill_pattern
         num_bars = 4
         beats_per_bar = self.beats_per_bar
-        subdivision = 4 # Steps per beat (16th notes)
-        step_size = 3   # ticks per step
+        subdivision = 4  # Steps per beat (16th notes)
+        step_size = 3  # ticks per step
 
         # Calculate active step in the 4-bar phrase
         current_bar_in_phrase = getattr(self, "current_bar_in_phrase", 0)
-        global_active_idx = (current_bar_in_phrase * beats_per_bar * subdivision) + (current_bar_beat * subdivision) + (current_sub_beat // step_size)
+        global_active_idx = (
+            (current_bar_in_phrase * beats_per_bar * subdivision)
+            + (current_bar_beat * subdivision)
+            + (current_sub_beat // step_size)
+        )
 
         # 4 rows: Cymbals, Toms/HH, Snare, Kick
         rows = [[] for _ in range(4)]
@@ -475,12 +500,18 @@ class RhythmicBrain:
                     has_ride = 51 in notes
 
                     syms = ["·", "·", "·", "·"]
-                    if has_crash: syms[0] = "C"
-                    elif has_ride: syms[0] = "R"
-                    if has_tom: syms[1] = "T"
-                    elif has_hh: syms[1] = "H"
-                    if has_snare: syms[2] = "S"
-                    if has_kick: syms[3] = "K"
+                    if has_crash:
+                        syms[0] = "C"
+                    elif has_ride:
+                        syms[0] = "R"
+                    if has_tom:
+                        syms[1] = "T"
+                    elif has_hh:
+                        syms[1] = "H"
+                    if has_snare:
+                        syms[2] = "S"
+                    if has_kick:
+                        syms[3] = "K"
 
                     is_active = (bar * beats_per_bar * subdivision) + (b * subdivision) + s == global_active_idx
                     for i in range(4):
@@ -550,5 +581,5 @@ class RhythmicBrain:
             "complexity": round(self.complexity, 1),
             "rhythm_pattern": self.current_recording.upper(),
             "visual": self.get_grid_visual(),
-            "current_tick": self.current_tick
+            "current_tick": self.current_tick,
         }

@@ -1,6 +1,7 @@
 import random
-from typing import Dict, Any
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
+from typing import Any, Dict
+
+from jam_shed.agents.base import PlayingStyle, VirtualInstrumentalist
 from jam_shed.agents.style_calibration import get_lead_section_multiplier
 from jam_shed.core.theory import MusicTheory
 
@@ -51,7 +52,9 @@ class VirtualLeadGuitarist(VirtualInstrumentalist):
         # Get scale notes
         scale_notes = MusicTheory.get_notes_in_key(self.root_note, self.scale_name, octaves=self.octave_range)
         # Get chord notes
-        chord_notes = MusicTheory.get_chord_notes(self.current_chord_root, self.current_chord_type, octaves=self.octave_range)
+        chord_notes = MusicTheory.get_chord_notes(
+            self.current_chord_root, self.current_chord_type, octaves=self.octave_range
+        )
 
         if not scale_notes:
             return
@@ -74,11 +77,9 @@ class VirtualLeadGuitarist(VirtualInstrumentalist):
 
         # Schedule Note Off (shorter for leads)
         import threading
+
         duration = 0.15
-        timer = threading.Timer(
-            duration,
-            lambda: self._note_off_with_cleanup(note, timer)
-        )
+        timer = threading.Timer(duration, lambda: self._note_off_with_cleanup(note, timer))
         self._active_timers.append(timer)
         timer.start()
 

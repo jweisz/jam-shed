@@ -1,13 +1,16 @@
-import time
 import os
+from typing import Optional
+
 import fluidsynth
+
 
 class AudioEngine:
     """
     Handles local audio synthesis using FluidSynth.
     Loads a GM SoundFont and provides methods for NoteOn/Off and Program Change.
     """
-    def __init__(self, soundfont_path: str = None):
+
+    def __init__(self, soundfont_path: Optional[str] = None):
         self.fs = fluidsynth.Synth()
 
         # Start the driver first (CoreAudio on macOS)

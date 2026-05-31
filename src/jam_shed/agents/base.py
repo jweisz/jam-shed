@@ -1,14 +1,16 @@
 import random
 import threading
 from enum import Enum
-from typing import Optional, List, Dict, Any
-from jam_shed.midi.engine import MIDIEngine
+from typing import Any, Callable, Dict, List, Optional
+
 from jam_shed.core.brain import RhythmicBrain
 from jam_shed.core.theory import MusicTheory
+from jam_shed.midi.engine import MIDIEngine
 
 
 class PlayingStyle(Enum):
     """Musical styles that influence agent playing behavior."""
+
     ROCK = "rock"
     JAZZ = "jazz"
     HIP_HOP = "hip_hop"
@@ -19,6 +21,7 @@ class PlayingStyle(Enum):
 
 class AgentMode(Enum):
     """Agent playing modes."""
+
     SOLO = "solo"
     ACCOMPANY = "accompany"
     SILENT = "silent"
@@ -34,7 +37,7 @@ class VirtualInstrumentalist:
         brain: RhythmicBrain,
         channel: int = 0,
         style: PlayingStyle = PlayingStyle.ROCK,
-        **kwargs
+        **kwargs,
     ):
         self.name = name
         self.midi = midi_engine
@@ -57,7 +60,7 @@ class VirtualInstrumentalist:
         # Personality - influenced by style
         self.reactivity = 0.8
         self.complexity_bias = 0.5
-        self.on_play_callback: Optional[callable] = None
+        self.on_play_callback: Optional[Callable[..., None]] = None
 
         # Jam personality/endurance model
         self.endurance = 1.0
@@ -69,6 +72,7 @@ class VirtualInstrumentalist:
 
         # Linear Scrolling Visualization
         from collections import deque
+
         self.rolling_visual_history: deque = deque(maxlen=64)
         self.last_step_idx: int = -1
         self.buffered_scrolling_hits: List[int] = []
@@ -106,7 +110,7 @@ class VirtualInstrumentalist:
             # Simplified Clave pattern (3-2)
             # Bar 1: 0, 1.5, 3 | Bar 2: 1, 2
             # For 8th note subdivision (sub=2): 0, 3, 6 (Bar 1) | 2, 4 (Bar 2)
-            anchors = [0, 3, 6, 10, 12] # Rough mapping
+            anchors = [0, 3, 6, 10, 12]  # Rough mapping
         elif self.style == PlayingStyle.FUNK:
             # "The One" is everything. Plus 16th note syncopations
             anchors = [0, 7, 11] if self.subdivision == 4 else [0, 3]
@@ -137,7 +141,6 @@ class VirtualInstrumentalist:
             # Additional emphasis on the very first beat of the 8-bar phrase
             if b == 0:
                 self.motif[0] = True
-
 
     def update_theory(self, root: str, scale: str) -> None:
         """Update root note and scale, optionally regenerating motif."""
@@ -225,7 +228,7 @@ class VirtualInstrumentalist:
         if not recent_agents:
             prob += 0.2  # Step into the gap
         elif len(recent_agents) >= 2:
-            prob -= 0.15 # Back off, room is crowded
+            prob -= 0.15  # Back off, room is crowded
 
         # In Jam mode, endurance and personality influence pacing.
         if state.get("is_jam_mode"):
@@ -233,7 +236,7 @@ class VirtualInstrumentalist:
             section_space = max(0.0, min(1.0, state.get("section_space_bias", 0.3)))
 
             # Density target scales overall activity by section.
-            prob *= (0.5 + (0.9 * section_density))
+            prob *= 0.5 + (0.9 * section_density)
 
             if self.endurance < 0.25:
                 prob *= 0.45 + (0.2 * self.personality_aggression)
@@ -257,27 +260,24 @@ class VirtualInstrumentalist:
         # Role pressure: soloists deplete faster than accompanists.
         role_pressure = 1.2 if self.mode == AgentMode.SOLO else 0.9
 
-        cost = self.endurance_drain_rate * role_pressure * (
-            0.45 * energy +
-            0.35 * tempo_norm +
-            0.20 * complexity
-        )
+        cost = self.endurance_drain_rate * role_pressure * (0.45 * energy + 0.35 * tempo_norm + 0.20 * complexity)
         recovery = self.endurance_recovery_rate * (1.0 - energy) * (0.7 + (0.3 * self.personality_restraint))
 
         self.endurance = max(0.0, min(1.0, self.endurance - cost + recovery))
-
 
     def get_recent_activity(self, beat: int, sub_beat: int, window_ticks: int = 12) -> List[str]:
         """Returns list of other agent names who played in the recent history window."""
         active_agents = []
         total_ticks_per_bar = self.beats_per_bar * 12
-        current_abs = (self.brain.current_bar * total_ticks_per_bar + beat * 12 + sub_beat)
+        current_abs = self.brain.current_bar * total_ticks_per_bar + beat * 12 + sub_beat
 
         for t in range(current_abs - window_ticks, current_abs):
-            if t < 0: continue
+            if t < 0:
+                continue
             hist_idx = t % self.brain.total_history_ticks
             for agent_name, history in self.brain.agent_history.items():
-                if agent_name == self.name: continue
+                if agent_name == self.name:
+                    continue
                 if history[hist_idx]:
                     if agent_name not in active_agents:
                         active_agents.append(agent_name)
@@ -305,10 +305,7 @@ class VirtualInstrumentalist:
 
         # Schedule Note Off with cleanup
         duration = 0.1
-        timer = threading.Timer(
-            duration,
-            lambda: self._note_off_with_cleanup(note, timer)
-        )
+        timer = threading.Timer(duration, lambda: self._note_off_with_cleanup(note, timer))
         self._active_timers.append(timer)
         timer.start()
 
@@ -327,7 +324,7 @@ class VirtualInstrumentalist:
         if self.on_play_callback:
             self.on_play_callback(self.name, note)
 
-    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: list = None) -> None:
+    def advance_scrolling_history(self, bar_beat: int, sub_beat: int, hits: Optional[List[Any]] = None) -> None:
         """Advance the melodic scrolling visual history by one 16th note step."""
         step_idx = sub_beat // 3
         current_global_step = (bar_beat * 4) + step_idx
@@ -355,6 +352,7 @@ class VirtualInstrumentalist:
     def get_scrolling_visual(self) -> str:
         """Returns the scrolling history as a single-line string with a fixed 'now' marker."""
         from jam_shed.tui.visual import render_scrolling_visual
+
         return render_scrolling_visual(self.rolling_visual_history)
 
     def _note_off_with_cleanup(self, note: int, timer: threading.Timer) -> None:
@@ -368,13 +366,15 @@ class VirtualInstrumentalist:
         except ValueError:
             pass  # Timer already removed
 
-    def get_groove_visual_rich(self, current_bar_beat: int, current_sub_beat: int, beats_per_bar: Optional[int] = None) -> str:
+    def get_groove_visual_rich(
+        self, current_bar_beat: int, current_sub_beat: int, beats_per_bar: Optional[int] = None
+    ) -> str:
         """Returns Textual-markup visualization matching the human groove format."""
         b_per_bar = beats_per_bar if beats_per_bar is not None else self.beats_per_bar
 
         parts = []
         subdivision = 4  # Show as 16th notes
-        step_size = 3    # 12 ticks / 4 steps = 3 ticks per 16th
+        step_size = 3  # 12 ticks / 4 steps = 3 ticks per 16th
 
         step_idx = current_sub_beat // step_size
         global_active_idx = (current_bar_beat * subdivision) + step_idx
@@ -395,7 +395,7 @@ class VirtualInstrumentalist:
                 else:
                     val = "."
 
-                val_str = val.ljust(2) + " " # Standardized 3-char width
+                val_str = val.ljust(2) + " "  # Standardized 3-char width
 
                 current_idx = (b * subdivision) + s
                 if current_idx == global_active_idx:

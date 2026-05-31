@@ -1,10 +1,10 @@
-
 import unittest
 from unittest.mock import MagicMock
-from jam_shed.core.brain import RhythmicBrain
-from jam_shed.agents.drummer import VirtualDrummer
+
 from jam_shed.agents.bassist import VirtualBassist
-from jam_shed.agents.base import PlayingStyle, AgentMode
+from jam_shed.agents.drummer import VirtualDrummer
+from jam_shed.core.brain import RhythmicBrain
+
 
 class TestMusicality(unittest.TestCase):
     def setUp(self):
@@ -40,6 +40,7 @@ class TestMusicality(unittest.TestCase):
         # Check if motif is 8 bars long
         steps_per_bar = self.drummer.beats_per_bar * self.drummer.subdivision
         self.assertEqual(len(self.drummer.motif), steps_per_bar * 8)
+
 
 if __name__ == "__main__":
     unittest.main()

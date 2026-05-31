@@ -10,7 +10,6 @@ Tuning notes:
 
 from jam_shed.agents.base import PlayingStyle
 
-
 ## Lead guitar section multipliers
 # Applies on top of lead baseline play probability in Jam mode.
 # Higher values = more active/more likely to speak.
@@ -101,7 +100,9 @@ def get_drum_phrase_fill_multiplier(style: PlayingStyle) -> float:
     return DRUM_PHRASE_FILL_MULTIPLIER.get(style, 1.0)
 
 
-def get_bass_tone_weights(style: PlayingStyle, section: str, is_supporting_spotlight: bool) -> tuple[float, float, float]:
+def get_bass_tone_weights(
+    style: PlayingStyle, section: str, is_supporting_spotlight: bool
+) -> tuple[float, float, float]:
     """Get bass note-choice weights for section role and style.
 
     Returns:

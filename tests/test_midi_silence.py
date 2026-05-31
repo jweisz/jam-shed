@@ -1,9 +1,8 @@
-
 import unittest
 from unittest.mock import MagicMock
-from jam_shed.midi.engine import MIDIEngine
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle
-from jam_shed.core.brain import RhythmicBrain
+
+from jam_shed.agents.base import VirtualInstrumentalist
+
 
 class TestNoteSilence(unittest.TestCase):
     def setUp(self):
@@ -17,8 +16,8 @@ class TestNoteSilence(unittest.TestCase):
         self.agent.play_note(state, 0, 0)
 
         # Verify note is tracked
-        self.assertIn(random_choice_placeholder_fix := list(self.agent._playing_notes)[0], self.agent._playing_notes)
-        note = random_choice_placeholder_fix
+        note = list(self.agent._playing_notes)[0]
+        self.assertIn(note, self.agent._playing_notes)
 
         # Stop the agent
         self.agent.stop()
@@ -28,10 +27,11 @@ class TestNoteSilence(unittest.TestCase):
         self.midi.send_message.assert_any_call([0x81, note, 0])
         self.assertEqual(len(self.agent._playing_notes), 0, "Active notes should be cleared on stop")
 
+
 if __name__ == "__main__":
-    import random
     # Mocking MusicTheory since it's used in play_note
     from jam_shed.core.theory import MusicTheory
+
     MusicTheory.get_notes_in_key = MagicMock(return_value=[60, 62, 64])
 
     unittest.main()

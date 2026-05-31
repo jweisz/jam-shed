@@ -2,11 +2,13 @@
 Constants and enums for jam-shed.
 Centralizes magic numbers, MIDI values, and configuration constants.
 """
+
 from enum import Enum, IntEnum
 
 
 class MIDICommand(IntEnum):
     """MIDI command bytes."""
+
     NOTE_OFF = 0x80
     NOTE_ON = 0x90
     POLYPHONIC_AFTERTOUCH = 0xA0
@@ -18,6 +20,7 @@ class MIDICommand(IntEnum):
 
 class DrumNote(IntEnum):
     """General MIDI drum note mappings (channel 10)."""
+
     # Bass/Kick Drums
     ACOUSTIC_BASS_DRUM = 35
     BASS_DRUM_1 = 36  # Standard kick
@@ -90,12 +93,14 @@ HIGH_TOM = DrumNote.HIGH_TOM
 
 class BPMMode(Enum):
     """BPM tracking modes."""
+
     FIXED = "fixed"
     ADAPTIVE = "adaptive"
 
 
 class RecordingMode(Enum):
     """Brain recording modes."""
+
     GROOVE = "groove"
     FILL = "fill"
 
@@ -115,7 +120,7 @@ STACCATO_DURATION = 0.15
 # Subdivision Constants
 TICKS_PER_BEAT = 12
 SIXTEENTH_NOTE_TICKS = 3  # 12 / 4
-EIGHTH_NOTE_TICKS = 6     # 12 / 2
+EIGHTH_NOTE_TICKS = 6  # 12 / 2
 QUARTER_NOTE_TICKS = 12
 
 # BPM Constants

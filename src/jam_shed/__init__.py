@@ -4,26 +4,27 @@ Jam Room - AI Jam Session Application
 A virtual band where you can jam with AI musicians
 that learn and respond to your playing in real-time.
 """
+
 from typing import TYPE_CHECKING
 
 from jam_shed.agents import (
-    VirtualInstrumentalist,
-    PlayingStyle,
+    AgentFactory,
     AgentMode,
+    PlayingStyle,
     VirtualBassist,
     VirtualDrummer,
+    VirtualInstrumentalist,
     VirtualKeyboardist,
     VirtualLeadGuitarist,
     VirtualRhythmGuitarist,
-    AgentFactory,
 )
-from jam_shed.midi import MIDIEngine, MIDIMessage
 from jam_shed.core import (
-    RhythmicBrain,
+    DEFAULT_BPM,
     JamSession,
     MusicTheory,
-    DEFAULT_BPM,
+    RhythmicBrain,
 )
+from jam_shed.midi import MIDIEngine, MIDIMessage
 
 if TYPE_CHECKING:
     from jam_shed.tui.app import JamShedApp

@@ -1,6 +1,7 @@
 """
 Shared debug logging utility for jam-shed.
 """
+
 import os
 import time
 

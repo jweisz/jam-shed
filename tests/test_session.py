@@ -1,12 +1,14 @@
 """
 Tests for jam_shed.session module.
 """
+
 import pytest
-from jam_shed.core.session import JamSession
+
 from jam_shed.agents import AgentMode, PlayingStyle
 from jam_shed.agents.bassist import VirtualBassist
-from jam_shed.midi.engine import MIDIEngine
 from jam_shed.core.brain import RhythmicBrain
+from jam_shed.core.session import JamSession
+from jam_shed.midi.engine import MIDIEngine
 
 
 @pytest.fixture
@@ -113,6 +115,7 @@ def shed_session():
     brain = RhythmicBrain(beats_per_bar=4)
 
     from jam_shed.agents.drummer import DrumShedAgent
+
     drum_partner = DrumShedAgent("Drum Partner", midi, brain, channel=9)
 
     session = JamSession(agents=[drum_partner])
@@ -286,6 +289,7 @@ def test_shed_phase_transitions_emit_callbacks():
     midi = MIDIEngine()
     brain = RhythmicBrain(beats_per_bar=4)
     from jam_shed.agents.drummer import DrumShedAgent
+
     drum_partner = DrumShedAgent("Drum Partner", midi, brain, channel=9)
 
     session = JamSession(agents=[drum_partner])
@@ -320,6 +324,7 @@ def groove_session():
     brain = RhythmicBrain(beats_per_bar=4)
 
     from jam_shed.agents.drummer import DrumShedAgent
+
     drum_partner = DrumShedAgent("Drum Partner", midi, brain, channel=9)
 
     session = JamSession(agents=[drum_partner])

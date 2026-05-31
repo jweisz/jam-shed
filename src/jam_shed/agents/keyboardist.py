@@ -1,16 +1,18 @@
 """
 VirtualKeyboardist - AI keyboard player that plays chords and melodies.
 """
+
 import random
-from typing import Dict, Any, List, Optional
-from jam_shed.agents.base import VirtualInstrumentalist, PlayingStyle, AgentMode
+from typing import Any, Dict, Optional
+
+from jam_shed.agents.base import AgentMode, PlayingStyle, VirtualInstrumentalist
 from jam_shed.agents.style_calibration import (
     get_keys_conversation_chord_probability,
     get_keys_spotlight_support_chord_probability,
 )
-from jam_shed.midi.engine import MIDIEngine
 from jam_shed.core.brain import RhythmicBrain
 from jam_shed.core.theory import MusicTheory
+from jam_shed.midi.engine import MIDIEngine
 
 
 class VirtualKeyboardist(VirtualInstrumentalist):
@@ -21,9 +23,9 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         name: str,
         midi_engine: MIDIEngine,
         brain: RhythmicBrain,
-        channel: int = 4, # Keyboards typically on channel 4
+        channel: int = 4,  # Keyboards typically on channel 4
         style: PlayingStyle = PlayingStyle.ROCK,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name, midi_engine, brain, channel=channel, style=style, **kwargs)
 
@@ -80,7 +82,6 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         self.subdivision = config["subdivision"]
         self.octave_range = config["octave_range"]
 
-
     def play_note(self, state: Dict[str, Any], beat: int, sub_beat: int, ghost: bool = False) -> None:
         """Play keyboard voicings - chords or melody based on mode and style."""
         if not self.midi.is_out_open():
@@ -91,7 +92,7 @@ class VirtualKeyboardist(VirtualInstrumentalist):
 
         # Decide: chord or single note
         if self.mode == AgentMode.SOLO:
-            #Solo mode: more single notes melody
+            # Solo mode: more single notes melody
             play_chord = random.random() < (self.voice_density * 0.3)
         else:
             # Accompany mode: more chords
@@ -113,7 +114,6 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         else:
             self._play_melody_note(state, beat, sub_beat, ghost)
 
-
     def _play_chord(self, state: Dict[str, Any], beat: int, sub_beat: int, ghost: bool = False) -> None:
         """Play a chord voicing."""
         # Determine chord type (use local variable to avoid mutating shared state)
@@ -127,11 +127,7 @@ class VirtualKeyboardist(VirtualInstrumentalist):
                 chord_type = "Min7"
 
         # Get chord notes
-        chord_notes = MusicTheory.get_chord_notes(
-            self.current_chord_root,
-            chord_type,
-            octaves=self.octave_range
-        )
+        chord_notes = MusicTheory.get_chord_notes(self.current_chord_root, chord_type, octaves=self.octave_range)
 
         if not chord_notes:
             return
@@ -144,17 +140,16 @@ class VirtualKeyboardist(VirtualInstrumentalist):
 
         # Play the chord (all notes at once)
         import threading
+
         for note in chord_notes[:4]:  # Limit to 4 notes for cleaner voicing
             self.midi.send_message([0x90 | self.channel, note, velocity])
             self._playing_notes.add(note)
 
             # Schedule note off
             duration = 0.2 if self.style == PlayingStyle.FUNK else 0.3
-            timer = threading.Timer(
-                duration,
-                lambda n=note, t_ref=[None]: self._note_off_with_cleanup(n, t_ref[0])
-            )
-            timer.args[0][-1] = timer  # Back-fill the reference
+            t_ref: list = [None]
+            timer = threading.Timer(duration, lambda n=note, r=t_ref: self._note_off_with_cleanup(n, r[0]))
+            t_ref[0] = timer  # Back-fill the reference after creation
             self._active_timers.append(timer)
             timer.start()
 
@@ -170,23 +165,16 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         # Buffer root note for scrolling visual (once per chord event)
         self.buffered_scrolling_hits.append(chord_notes[0])
 
-
     def _play_melody_note(self, state: Dict[str, Any], beat: int, sub_beat: int, ghost: bool = False) -> None:
         """Play a single melody note from the scale."""
-        notes = MusicTheory.get_notes_in_key(
-            self.root_note,
-            self.scale_name,
-            octaves=self.octave_range
-        )
+        notes = MusicTheory.get_notes_in_key(self.root_note, self.scale_name, octaves=self.octave_range)
 
         if not notes:
             return
 
         # Choose note with slight preference for chord tones
         chord_notes = MusicTheory.get_chord_notes(
-            self.current_chord_root,
-            self.current_chord_type,
-            octaves=self.octave_range
+            self.current_chord_root, self.current_chord_type, octaves=self.octave_range
         )
 
         # 70% chance to play chord tone, 30% scale tone
@@ -206,11 +194,9 @@ class VirtualKeyboardist(VirtualInstrumentalist):
 
         # Schedule note off
         import threading
+
         duration = 0.15
-        timer = threading.Timer(
-            duration,
-            lambda: self._note_off_with_cleanup(note, timer)
-        )
+        timer = threading.Timer(duration, lambda: self._note_off_with_cleanup(note, timer))
         self._active_timers.append(timer)
         timer.start()
 
@@ -224,7 +210,9 @@ class VirtualKeyboardist(VirtualInstrumentalist):
         if self.on_play_callback:
             self.on_play_callback(self.name, note)
 
-    def get_groove_visual_rich(self, current_bar_beat: int, current_sub_beat: int, beats_per_bar: Optional[int] = None) -> str:
+    def get_groove_visual_rich(
+        self, current_bar_beat: int, current_sub_beat: int, beats_per_bar: Optional[int] = None
+    ) -> str:
         """Visual representation showing chord vs melody notes."""
         b_per_bar = beats_per_bar if beats_per_bar is not None else self.beats_per_bar
 
@@ -254,7 +242,7 @@ class VirtualKeyboardist(VirtualInstrumentalist):
                 else:
                     val = ". "
 
-                val_str = val.ljust(2) + " " # Standardized 3-char width
+                val_str = val.ljust(2) + " "  # Standardized 3-char width
 
                 current_idx = (b * subdivision) + s
                 if current_idx == global_active_idx:

@@ -1,8 +1,9 @@
 import threading
-import time
-from typing import List, Dict, Optional
-from jam_shed.agents.base import VirtualInstrumentalist, AgentMode
+from typing import Callable, Dict, List, Optional
+
+from jam_shed.agents.base import AgentMode, VirtualInstrumentalist
 from jam_shed.utils.debug import debug_log
+
 
 class JamSession:
     def __init__(self, agents: Optional[List[VirtualInstrumentalist]] = None, brain=None):
@@ -12,9 +13,9 @@ class JamSession:
         self.brain = brain
         self.bars_per_solo = 4
         self.beats_per_bar = 4
-        self.current_soloist: Optional[str] = "Human" # "Human" or Agent Name
+        self.current_soloist: Optional[str] = "Human"  # "Human" or Agent Name
         self.bars_elapsed = 0
-        self.beats_elapsed = 0 # 0-indexed count within bar
+        self.beats_elapsed = 0  # 0-indexed count within bar
         self.is_trading = False
         self.is_groove = False
         self.waiting_for_first_hit = True
@@ -22,14 +23,16 @@ class JamSession:
         self._leadin_complete_pending = False
         self.bars_per_cycle = 12
         self.current_phase = "Waiting for First Hit..."
-        self.on_bar_elapsed: Optional[callable] = None
+        self.on_bar_elapsed: Optional[Callable[[], None]] = None
+        self.on_cycle_reset: Optional[Callable[[], None]] = None
+        self.on_turn_change: Optional[Callable[[Optional[str]], None]] = None
 
         # Musical Context
         self.key_root = "C"
         self.scale_name = "Pentatonic Minor"
         self.progression_name = "12-Bar Blues"
-        self.chord_sequence = []
-        self.current_chord = ("C", "Minor") # (Root, Type)
+        self.chord_sequence: list[tuple[str, str]] = []
+        self.current_chord = ("C", "Minor")  # (Root, Type)
         self.chord_index = 0
 
         # Jam Mode Arranger State
@@ -115,11 +118,14 @@ class JamSession:
 
     def get_jam_section_profile(self) -> Dict[str, float]:
         section = self.jam_sections[self.jam_section_index]
-        return self.jam_section_profiles.get(section, {
-            "density_target": 0.5,
-            "space_bias": 0.3,
-            "solo_bias": 0.2,
-        })
+        return self.jam_section_profiles.get(
+            section,
+            {
+                "density_target": 0.5,
+                "space_bias": 0.3,
+                "solo_bias": 0.2,
+            },
+        )
 
     def update_human_state(self, confidence: float, energy: float, complexity: float) -> None:
         """Update human performance signals used by the Jam arranger."""
@@ -139,11 +145,7 @@ class JamSession:
         avg_endurance = self._get_avg_agent_endurance()
         endurance_pressure = 1.0 - avg_endurance
         variation_need = max(0.0, min(1.0, (self.human_complexity * 0.7) + (endurance_pressure * 0.3)))
-        readiness = (
-            0.45 * self.human_confidence +
-            0.35 * endurance_pressure +
-            0.20 * variation_need
-        )
+        readiness = 0.45 * self.human_confidence + 0.35 * endurance_pressure + 0.20 * variation_need
         self.last_transition_readiness = max(0.0, min(1.0, readiness))
         return self.last_transition_readiness
 
@@ -204,6 +206,7 @@ class JamSession:
 
     def update_theory(self, key: str, scale: str, progression: str = "12-Bar Blues"):
         from jam_shed.core.theory import MusicTheory
+
         self.key_root = key
         self.scale_name = scale
         self.progression_name = progression
@@ -250,7 +253,8 @@ class JamSession:
                 else:
                     self.current_soloist = "Human"
                     self.current_phase = f"JAM: {self.jam_sections[self.jam_section_index]}"
-                debug_log(f"SESSION: Lead-in Complete. Mode: {'Groove' if self.is_groove else ('Shed' if self.is_trading else 'Jam')}")
+                mode_name = "Groove" if self.is_groove else ("Shed" if self.is_trading else "Jam")
+                debug_log(f"SESSION: Lead-in Complete. Mode: {mode_name}")
                 if hasattr(self, "_update_agent_modes"):
                     self._update_agent_modes()
                 self.notify_bar_elapsed(defer_callbacks=True)
@@ -263,7 +267,7 @@ class JamSession:
 
         self.beats_elapsed += 1
 
-        debug_log(f'SESSION: Beat {self.beats_elapsed}/{self.beats_per_bar}')
+        debug_log(f"SESSION: Beat {self.beats_elapsed}/{self.beats_per_bar}")
 
         if self.beats_elapsed >= self.beats_per_bar:
             self.beats_elapsed = 0
@@ -296,7 +300,7 @@ class JamSession:
 
     def stop_trading(self):
         self.is_trading = False
-        self.current_soloist = "Human" # Default back to human
+        self.current_soloist = "Human"  # Default back to human
         self.current_phase = "JAMMING"
         self._update_agent_modes()
 
@@ -316,8 +320,8 @@ class JamSession:
 
         # Advance Chord Progression (Should happen in Jam mode too)
         if self.chord_sequence:
-             self.chord_index = (self.chord_index + 1) % len(self.chord_sequence)
-             self.current_chord = self.chord_sequence[self.chord_index]
+            self.chord_index = (self.chord_index + 1) % len(self.chord_sequence)
+            self.current_chord = self.chord_sequence[self.chord_index]
 
         if not self.is_trading and not self.is_groove:
             self._update_jam_arranger()
@@ -409,14 +413,14 @@ class JamSession:
 
         self._update_agent_modes()
 
-
-
     def _update_agent_modes(self):
         for agent in self.agents:
             # Match by name or class if name varies
-            is_soloist = (agent.name == self.current_soloist) or \
-                         (self.current_soloist == "DRUMMER" and "Drum" in agent.name) or \
-                         (self.current_soloist == "Virtual Drummer" and "Drum" in agent.name)
+            is_soloist = (
+                (agent.name == self.current_soloist)
+                or (self.current_soloist == "DRUMMER" and "Drum" in agent.name)
+                or (self.current_soloist == "Virtual Drummer" and "Drum" in agent.name)
+            )
 
             if is_soloist:
                 agent.mode = AgentMode.SOLO
@@ -439,7 +443,7 @@ class JamSession:
                 "beats_elapsed": self.beats_elapsed,
                 "beats_per_bar": self.beats_per_bar,
                 "phase": self.current_phase,
-                "current_chord": f"{self.current_chord[0]} {self.current_chord[1]}", # e.g. "C Major"
+                "current_chord": f"{self.current_chord[0]} {self.current_chord[1]}",  # e.g. "C Major"
                 "is_waiting": self.waiting_for_first_hit,
                 "jam_section": self.jam_sections[self.jam_section_index],
                 "jam_section_bars": max(0, self.bars_elapsed - self.jam_section_started_at_bar),
@@ -447,4 +451,4 @@ class JamSession:
                 "jam_density_target": self.get_jam_section_profile().get("density_target", 0.5),
                 "jam_space_bias": self.get_jam_section_profile().get("space_bias", 0.3),
                 "jam_solo_bias": self.get_jam_section_profile().get("solo_bias", 0.2),
-        }
+            }

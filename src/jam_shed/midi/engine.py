@@ -1,19 +1,57 @@
-import rtmidi
 import time
-from typing import List, Optional, Callable
+from typing import Any, Callable, List, Optional, Protocol, cast
+
+import rtmidi
+
 # Import AudioEngine lazily or here if safe
 from jam_shed.core.audio import AudioEngine
 
+
+class MidiInLike(Protocol):
+    def get_ports(self) -> List[str]: ...
+
+    def open_port(self, port: int) -> None: ...
+
+    def close_port(self) -> None: ...
+
+    def is_port_open(self) -> bool: ...
+
+    def ignore_types(self, sysex: bool, timing: bool, sensing: bool) -> None: ...
+
+    def set_callback(self, callback: Callable[..., Any]) -> None: ...
+
+
+class MidiOutLike(Protocol):
+    def get_ports(self) -> List[str]: ...
+
+    def open_port(self, port: int) -> None: ...
+
+    def close_port(self) -> None: ...
+
+    def is_port_open(self) -> bool: ...
+
+    def send_message(self, message: List[int]) -> None: ...
+
+
 class MIDIEngine:
-    def __init__(self, soundfont_path: str = None):
+    def __init__(self, soundfont_path: Optional[str] = None):
+        self.midi_in: Optional[MidiInLike] = None
+        self.midi_out: Optional[MidiOutLike] = None
+
         try:
-            self.midi_in = rtmidi.MidiIn()
+            midi_in_cls = getattr(rtmidi, "MidiIn", None)
+            if midi_in_cls is None:
+                raise AttributeError("rtmidi.MidiIn is unavailable")
+            self.midi_in = cast(MidiInLike, midi_in_cls())
         except Exception as e:
             print(f"Warning: Could not initialize MIDI Input: {e}")
             self.midi_in = None
 
         try:
-            self.midi_out = rtmidi.MidiOut()
+            midi_out_cls = getattr(rtmidi, "MidiOut", None)
+            if midi_out_cls is None:
+                raise AttributeError("rtmidi.MidiOut is unavailable")
+            self.midi_out = cast(MidiOutLike, midi_out_cls())
         except Exception as e:
             print(f"Warning: Could not initialize MIDI Output: {e}")
             self.midi_out = None
@@ -48,10 +86,11 @@ class MIDIEngine:
         return self._in_open
 
     def is_out_open(self) -> bool:
-        return self._out_open or (self._use_local and self.audio)
+        return self._out_open or (self._use_local and self.audio is not None)
 
     def get_input_ports(self) -> List[str]:
-        if not self.midi_in: return []
+        if not self.midi_in:
+            return []
         ports = self.midi_in.get_ports()
         return [p for p in ports if p]
 
@@ -61,7 +100,8 @@ class MIDIEngine:
         return [p for p in ports if p] + ["Local (Fluidsynth)"]
 
     def open_input(self, port_name: str, callback: Optional[Callable] = None) -> bool:
-        if not self.midi_in or not port_name or port_name == "Select Input...": return False
+        if not self.midi_in or not port_name or port_name == "Select Input...":
+            return False
 
         try:
             self._log(f"DEBUG: Attempting to open Input: {port_name}")
@@ -102,7 +142,8 @@ class MIDIEngine:
             return False
 
     def open_output(self, port_name: str) -> bool:
-        if not port_name or port_name == "Select Output...": return False
+        if not port_name or port_name == "Select Output...":
+            return False
 
         # Handle Local Synth
         if port_name == "Local (Fluidsynth)":
@@ -110,9 +151,9 @@ class MIDIEngine:
             if self.audio and self.audio.sf_id != -1:
                 self._use_local = True
                 self._init_local_programs()
-                self._log(f"SUCCESS: Connected to Local Audio Synthesis")
+                self._log("SUCCESS: Connected to Local Audio Synthesis")
                 # Ensure physical port is closed
-                if self.midi_out.is_port_open():
+                if self.midi_out and self.midi_out.is_port_open():
                     self.midi_out.close_port()
                 return True
             else:
@@ -121,12 +162,15 @@ class MIDIEngine:
 
         # Handle Physical Ports
         self._use_local = False
+        if not self.midi_out:
+            self._log("ERROR: MIDI output is not available")
+            return False
         try:
             if self.midi_out.is_port_open():
                 self.midi_out.close_port()
             self._out_open = False
 
-            ports = self.midi_out.get_ports() # Don't use get_output_ports() here to avoid recursion/virtual entries
+            ports = self.midi_out.get_ports()  # Don't use get_output_ports() here to avoid recursion/virtual entries
             target_index = -1
             if port_name in ports:
                 target_index = ports.index(port_name)
@@ -138,7 +182,8 @@ class MIDIEngine:
                         port_name = p
                         break
 
-            if target_index == -1: return False # Should fail gracefully
+            if target_index == -1:
+                return False  # Should fail gracefully
 
             self.out_port_index = target_index
             self.midi_out.open_port(self.out_port_index)
@@ -161,7 +206,8 @@ class MIDIEngine:
 
     def _init_local_programs(self):
         """Sets GM instruments for our channels. Matches agent definitions."""
-        if not self.audio or self._programs_set: return
+        if not self.audio or self._programs_set:
+            return
 
         # NOTE: Channels here match agent.channel (0-indexed)
         # We use explicit General MIDI (GM) program numbers:
@@ -171,15 +217,15 @@ class MIDIEngine:
         # 4:  Electric Piano 1 (Rhodes)
         # 24: Acoustic Guitar (nylon)
 
-        self.audio.program_change(0, 24) # Human Input (usually piano/acoustic guitar)
-        self.audio.program_change(1, 29) # Lead Guitar (Ch 1)
-        self.audio.program_change(2, 27) # Rhythm Guitar (Ch 2)
-        self.audio.program_change(3, 33) # Bass (Ch 3)
+        self.audio.program_change(0, 24)  # Human Input (usually piano/acoustic guitar)
+        self.audio.program_change(1, 29)  # Lead Guitar (Ch 1)
+        self.audio.program_change(2, 27)  # Rhythm Guitar (Ch 2)
+        self.audio.program_change(3, 33)  # Bass (Ch 3)
         self.audio.program_change(4, 4)  # Keyboardist (Ch 4)
 
         # Drums are traditionally on Channel 10 (index 9)
         self.audio.set_drums(9)
-        self.audio.set_drums(10) # Spare drum channel
+        self.audio.set_drums(10)  # Spare drum channel
         self._programs_set = True
 
     def send_message(self, message: List[int]):
@@ -189,7 +235,7 @@ class MIDIEngine:
             channel = status & 0x0F
             cmd = status & 0xF0
 
-            if cmd == 0x90: # Note On
+            if cmd == 0x90:  # Note On
                 note = message[1]
                 velocity = message[2]
                 if velocity > 0:
@@ -198,13 +244,12 @@ class MIDIEngine:
                     self.audio.note_on(channel, note, velocity)
                 else:
                     self.audio.note_off(channel, note)
-            elif cmd == 0x80: # Note Off
+            elif cmd == 0x80:  # Note Off
                 note = message[1]
                 self.audio.note_off(channel, note)
-            elif cmd == 0xB0: # Control Change
+            elif cmd == 0xB0:  # Control Change
                 cc_num = message[1]
-                value = message[2]
-                if cc_num == 123: # All Notes Off
+                if cc_num == 123:  # All Notes Off
                     self.audio.all_notes_off(channel)
             return
 
@@ -222,10 +267,13 @@ class MIDIEngine:
             self.all_notes_off(i)
 
     def close(self):
-        if self.midi_in: self.midi_in.close_port()
-        if self.midi_out: self.midi_out.close_port()
+        if self.midi_in:
+            self.midi_in.close_port()
+        if self.midi_out:
+            self.midi_out.close_port()
         if self.audio:
             self.audio.close()
+
 
 if __name__ == "__main__":
     # Quick debug script
